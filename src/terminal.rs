@@ -10,9 +10,33 @@ pub struct Terminal {
 impl Terminal {
     /// Create a new terminal interface
     pub fn new() -> Self {
-        Self {
-            size: (24, 80), // Default size, will be updated when we implement size detection
+        let size = Self::detect_size().unwrap_or((24, 80));
+        Self { size }
+    }
+    
+    /// Detect terminal size using ioctl
+    pub fn detect_size() -> io::Result<(usize, usize)> {
+        let fd = io::stdout().as_raw_fd();
+        let mut winsize = libc::winsize {
+            ws_row: 0,
+            ws_col: 0,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        
+        let result = unsafe { libc::ioctl(fd, libc::TIOCGWINSZ, &mut winsize) };
+        
+        if result == 0 && winsize.ws_row > 0 && winsize.ws_col > 0 {
+            Ok((winsize.ws_row as usize, winsize.ws_col as usize))
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "Failed to get terminal size"))
         }
+    }
+    
+    /// Update terminal size (call when terminal is resized)
+    pub fn update_size(&mut self) -> io::Result<()> {
+        self.size = Self::detect_size()?;
+        Ok(())
     }
     
     /// Enter raw mode and return a guard for safe restoration
@@ -67,6 +91,45 @@ impl Terminal {
         // In raw mode, we need to explicitly use \r\n for line endings
         print!("{}\r\n", text);
         io::stdout().flush()
+    }
+    
+    /// Clear from cursor to end of line
+    pub fn clear_line(&self) -> io::Result<()> {
+        print!("\x1b[K");
+        io::stdout().flush()
+    }
+    
+    /// Clear the current line entirely
+    pub fn clear_entire_line(&self) -> io::Result<()> {
+        print!("\x1b[2K");
+        io::stdout().flush()
+    }
+    
+    /// Write text with truncation to fit terminal width
+    pub fn write_truncated(&self, text: &str, max_width: usize) -> io::Result<()> {
+        let truncated = if text.chars().count() > max_width {
+            text.chars().take(max_width).collect::<String>()
+        } else {
+            text.to_string()
+        };
+        print!("{}", truncated);
+        io::stdout().flush()
+    }
+    
+    /// Write text with background color (for highlighting)
+    pub fn write_highlighted(&self, text: &str) -> io::Result<()> {
+        print!("\x1b[7m{}\x1b[m", text); // Invert colors
+        io::stdout().flush()
+    }
+    
+    /// Get rows (height) of terminal
+    pub fn rows(&self) -> usize {
+        self.size.0
+    }
+    
+    /// Get columns (width) of terminal
+    pub fn cols(&self) -> usize {
+        self.size.1
     }
 }
 

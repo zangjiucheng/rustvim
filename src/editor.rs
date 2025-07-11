@@ -79,14 +79,128 @@ impl Editor {
     }
     
     /// Main editor event loop (to be implemented)
-    pub fn run(&mut self) {
-        // TODO: Implement the main event loop
-        // This will handle:
-        // 1. Reading input
-        // 2. Processing commands based on mode
-        // 3. Updating the screen
-        // 4. Managing state transitions
-        println!("Editor event loop - to be implemented");
+    pub fn run(&mut self) -> std::io::Result<()> {
+        // Enter raw mode
+        let _raw_guard = self.terminal.enter_raw_mode()?;
+        
+        // Initial screen refresh
+        self.refresh_screen()?;
+        
+        // TODO: Main event loop will be implemented in Day 6
+        // For now, just demonstrate rendering
+        println!("Day 5: Screen rendering implemented. Press any key to continue...");
+        std::io::Read::read(&mut std::io::stdin(), &mut [0u8; 1])?;
+        
+        Ok(())
+    }
+    
+    /// Refresh the screen display with current buffer content
+    pub fn refresh_screen(&self) -> std::io::Result<()> {
+        // Hide cursor during redraw
+        self.terminal.hide_cursor()?;
+        
+        // Move to home position
+        self.terminal.move_cursor_home()?;
+        
+        // Draw buffer content
+        self.draw_buffer()?;
+        
+        // Draw status line
+        self.draw_status_line()?;
+        
+        // Position cursor at editor cursor position
+        let screen_row = self.cursor.row.saturating_sub(self.scroll_offset) + 1;
+        let screen_col = self.cursor.col + 1;
+        self.terminal.move_cursor(screen_row, screen_col)?;
+        
+        // Show cursor
+        self.terminal.show_cursor()?;
+        
+        Ok(())
+    }
+    
+    /// Draw buffer content to screen
+    fn draw_buffer(&self) -> std::io::Result<()> {
+        let rows = self.terminal.rows();
+        let cols = self.terminal.cols();
+        
+        // Reserve last row for status line
+        let content_rows = rows.saturating_sub(1);
+        
+        for screen_row in 0..content_rows {
+            let buffer_row = screen_row + self.scroll_offset;
+            
+            if buffer_row < self.buffer.line_count() {
+                // Draw actual buffer line
+                if let Some(line) = self.buffer.get_line(buffer_row) {
+                    self.terminal.write_truncated(line, cols)?;
+                }
+            } else {
+                // Draw tilde for empty lines (like Vim)
+                self.terminal.write("~")?;
+            }
+            
+            // Clear rest of line and move to next
+            self.terminal.clear_line()?;
+            if screen_row < content_rows - 1 {
+                self.terminal.write("\r\n")?;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Draw status line at bottom of screen
+    fn draw_status_line(&self) -> std::io::Result<()> {
+        let rows = self.terminal.rows();
+        let cols = self.terminal.cols();
+        
+        // Move to status line (last row)
+        self.terminal.move_cursor(rows, 1)?;
+        
+        // Create status line content
+        let filename = self.filename.as_deref().unwrap_or("[No Name]");
+        let modified = if self.modified { " [Modified]" } else { "" };
+        let mode = format!("{:?}", self.mode);
+        let position = format!("{}:{}", self.cursor.row + 1, self.cursor.col + 1);
+        let lines = format!("{} lines", self.buffer.line_count());
+        
+        let left = format!("{}{} - {}", filename, modified, mode);
+        let right = format!("{} - {}", position, lines);
+        
+        // Calculate spacing
+        let left_len = left.chars().count();
+        let right_len = right.chars().count();
+        let spacing = if left_len + right_len < cols {
+            cols - left_len - right_len
+        } else {
+            0
+        };
+        
+        // Write status line with background
+        self.terminal.write_highlighted(&format!("{}{}{}", 
+            left,
+            " ".repeat(spacing),
+            right
+        ))?;
+        
+        Ok(())
+    }
+    
+    /// Update scroll offset to keep cursor visible
+    pub fn update_scroll(&mut self) {
+        let rows = self.terminal.rows();
+        let content_rows = rows.saturating_sub(1); // Reserve space for status line
+        
+        // Scroll up if cursor is above visible area
+        if self.cursor.row < self.scroll_offset {
+            self.scroll_offset = self.cursor.row;
+        }
+        
+        // Scroll down if cursor is below visible area
+        if self.cursor.row >= self.scroll_offset + content_rows {
+            self.scroll_offset = self.cursor.row - content_rows + 1;
+        }
     }
     
     /// Move cursor safely within buffer bounds
