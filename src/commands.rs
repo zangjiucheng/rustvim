@@ -121,6 +121,8 @@ impl CommandProcessor {
             Key::Char('^') => Some(NormalCommand::Movement(MovementCommand::LineFirstChar)),
             Key::Char('$') => Some(NormalCommand::Movement(MovementCommand::LineEnd)),
             
+            Key::Char('G') => Some(NormalCommand::Movement(MovementCommand::FileEnd)),
+            
             // Edit commands
             Key::Char('x') => Some(NormalCommand::Edit(EditCommand::DeleteChar)),
             Key::Char('u') => Some(NormalCommand::Edit(EditCommand::Undo)),
@@ -146,6 +148,21 @@ impl CommandProcessor {
         }
     }
     
+    /// Parse special multi-key commands (like 'gg')
+    pub fn parse_multi_key_command(first_key: &Key, input_handler: &mut crate::input::InputHandler) -> Option<NormalCommand> {
+        match first_key {
+            Key::Char('g') => {
+                // Wait for second 'g' to go to top of file
+                if let Ok(Key::Char('g')) = input_handler.read_key() {
+                    Some(NormalCommand::Movement(MovementCommand::FileStart))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    
     /// Execute a command on the editor
     pub fn execute_command(editor: &mut Editor, command: NormalCommand) {
         match command {
@@ -164,31 +181,113 @@ impl CommandProcessor {
         }
     }
     
-    /// Execute movement command (to be implemented)
+    /// Execute movement command
     fn execute_movement(editor: &mut Editor, command: MovementCommand) {
-        // TODO: Implement movement logic
+        match command {
+            MovementCommand::Left => {
+                editor.cursor_left();
+                editor.update_scroll();
+            }
+            MovementCommand::Right => {
+                editor.cursor_right();
+                editor.update_scroll();
+            }
+            MovementCommand::Up => {
+                editor.cursor_up();
+                editor.update_scroll();
+            }
+            MovementCommand::Down => {
+                editor.cursor_down();
+                editor.update_scroll();
+            }
+            MovementCommand::LineStart => {
+                editor.cursor.col = 0;
+            }
+            MovementCommand::LineEnd => {
+                let line_len = editor.buffer.line_length(editor.cursor.row);
+                editor.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
+            }
+            MovementCommand::FileStart => {
+                editor.cursor.row = 0;
+                editor.cursor.col = 0;
+                editor.update_scroll();
+            }
+            MovementCommand::FileEnd => {
+                editor.cursor.row = editor.buffer.line_count().saturating_sub(1);
+                let line_len = editor.buffer.line_length(editor.cursor.row);
+                editor.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
+                editor.update_scroll();
+            }
+            _ => {
+                // TODO: Implement word movements and page movements
+            }
+        }
     }
     
-    /// Execute edit command (to be implemented)
+    /// Execute edit command
     fn execute_edit(editor: &mut Editor, command: EditCommand) {
-        // TODO: Implement edit logic
+        match command {
+            EditCommand::DeleteChar => {
+                // TODO: Implement 'x' command - delete character under cursor
+            }
+            EditCommand::Undo => {
+                // TODO: Implement undo functionality
+            }
+            EditCommand::Redo => {
+                // TODO: Implement redo functionality
+            }
+            _ => {
+                // TODO: Implement other edit commands
+            }
+        }
     }
     
-    /// Execute mode switch command (to be implemented)
+    /// Execute mode switch command
     fn execute_mode_switch(editor: &mut Editor, command: ModeSwitchCommand) {
         match command {
             ModeSwitchCommand::InsertBefore => {
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertAfter => {
+                // Move cursor right one position, then enter insert mode
+                editor.cursor_right();
                 editor.mode = Mode::Insert;
-                // TODO: Move cursor forward one position
+            }
+            ModeSwitchCommand::InsertLineEnd => {
+                // Move to end of line, then enter insert mode
+                let line_len = editor.buffer.line_length(editor.cursor.row);
+                editor.cursor.col = line_len; // After last character for append
+                editor.mode = Mode::Insert;
+            }
+            ModeSwitchCommand::InsertLineStart => {
+                // Move to first non-blank character, then enter insert mode
+                editor.cursor.col = 0; // Simplified - move to start of line
+                editor.mode = Mode::Insert;
+            }
+            ModeSwitchCommand::OpenLineBelow => {
+                // Create new line below current line and enter insert mode
+                let pos = crate::buffer::Position::new(editor.cursor.row, editor.buffer.line_length(editor.cursor.row));
+                editor.buffer.insert_newline(pos);
+                editor.cursor.row += 1;
+                editor.cursor.col = 0;
+                editor.modified = true;
+                editor.update_scroll();
+                editor.mode = Mode::Insert;
+            }
+            ModeSwitchCommand::OpenLineAbove => {
+                // Create new line above current line and enter insert mode
+                let pos = crate::buffer::Position::new(editor.cursor.row, 0);
+                editor.buffer.insert_newline(pos);
+                editor.cursor.col = 0;
+                editor.modified = true;
+                editor.update_scroll();
+                editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::CommandMode => {
                 editor.mode = Mode::Command;
             }
             _ => {
-                // TODO: Implement other mode switches
+                // TODO: Implement search modes
             }
         }
     }
@@ -196,5 +295,80 @@ impl CommandProcessor {
     /// Execute file command (to be implemented)
     fn execute_file_command(editor: &mut Editor, command: FileCommand) {
         // TODO: Implement file operations
+    }
+}
+
+/// Insert mode command processor
+pub struct InsertModeProcessor;
+
+impl InsertModeProcessor {
+    /// Handle insert mode input
+    pub fn handle_input(editor: &mut Editor, key: &Key) {
+        match key {
+            // Regular character insertion
+            Key::Char(c) => {
+                editor.buffer.insert_char(
+                    crate::buffer::Position::new(editor.cursor.row, editor.cursor.col), 
+                    *c
+                );
+                editor.cursor.col += 1;
+                editor.modified = true;
+            }
+            
+            // Enter key - split line
+            Key::Enter => {
+                editor.buffer.insert_newline(
+                    crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
+                );
+                editor.cursor.row += 1;
+                editor.cursor.col = 0;
+                editor.modified = true;
+                editor.update_scroll();
+            }
+            
+            // Backspace - delete character to the left
+            Key::Backspace => {
+                if editor.cursor.col > 0 {
+                    // Delete character to the left in current line
+                    editor.cursor.col -= 1;
+                    editor.buffer.delete_char(
+                        crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
+                    );
+                    editor.modified = true;
+                } else if editor.cursor.row > 0 {
+                    // At beginning of line - join with previous line
+                    editor.cursor.row -= 1;
+                    editor.cursor.col = editor.buffer.line_length(editor.cursor.row);
+                    
+                    // Delete the newline (which will merge the lines)
+                    editor.buffer.delete_char(
+                        crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
+                    );
+                    
+                    editor.modified = true;
+                    editor.update_scroll();
+                }
+            }
+            
+            // Arrow keys in insert mode (for navigation without leaving insert)
+            Key::Left => {
+                editor.cursor_left();
+            }
+            Key::Right => {
+                editor.cursor_right();
+            }
+            Key::Up => {
+                editor.cursor_up();
+                editor.update_scroll();
+            }
+            Key::Down => {
+                editor.cursor_down();
+                editor.update_scroll();
+            }
+            
+            _ => {
+                // Unhandled key in insert mode - ignore
+            }
+        }
     }
 }

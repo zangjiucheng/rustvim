@@ -1,5 +1,6 @@
 use crate::buffer::Buffer;
 use crate::terminal::Terminal;
+use crate::commands::{CommandProcessor, InsertModeProcessor};
 
 /// Represents the current mode of the editor
 #[derive(Debug, Clone, PartialEq)]
@@ -92,10 +93,14 @@ impl Editor {
         // Main event loop
         while self.running {
             // Read key input
-            match input_handler.read_key()? {
+            let key = input_handler.read_key()?;
+            
+            // Handle global commands first
+            match &key {
                 // Quit commands
                 crate::input::Key::Ctrl('q') => {
                     self.running = false;
+                    continue;
                 }
                 crate::input::Key::Esc => {
                     match self.mode {
@@ -111,144 +116,46 @@ impl Editor {
                             self.running = false;
                         }
                     }
+                    self.refresh_screen()?;
+                    continue;
                 }
-                
-                // Navigation keys (hjkl and arrows) - only in Normal mode
-                key if self.mode == Mode::Normal => {
-                    match key {
-                        // Insert mode entry
-                        crate::input::Key::Char('i') => {
-                            self.mode = Mode::Insert;
-                        }
-                        
-                        // Vim-style navigation with arrow key support
-                        crate::input::Key::Char('h') | crate::input::Key::Left => {
-                            self.cursor_left();
-                            self.update_scroll();
-                        }
-                        crate::input::Key::Char('j') | crate::input::Key::Down => {
-                            self.cursor_down();
-                            self.update_scroll();
-                        }
-                        crate::input::Key::Char('k') | crate::input::Key::Up => {
-                            self.cursor_up();
-                            self.update_scroll();
-                        }
-                        crate::input::Key::Char('l') | crate::input::Key::Right => {
-                            self.cursor_right();
-                            self.update_scroll();
-                        }
-                        
-                        // Line navigation
-                        crate::input::Key::Char('0') => {
-                            self.cursor.col = 0;
-                        }
-                        crate::input::Key::Char('$') => {
-                            let line_len = self.buffer.line_length(self.cursor.row);
-                            // Move to last character, or stay at 0 if line is empty
-                            self.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
-                        }
-                        
-                        // File navigation
-                        crate::input::Key::Char('g') => {
-                            // Wait for second 'g' to go to top of file
-                            if let Ok(crate::input::Key::Char('g')) = input_handler.read_key() {
-                                self.cursor.row = 0;
-                                self.cursor.col = 0;
-                                self.update_scroll();
-                            }
-                        }
-                        crate::input::Key::Char('G') => {
-                            // Go to end of file
-                            self.cursor.row = self.buffer.line_count().saturating_sub(1);
-                            let line_len = self.buffer.line_length(self.cursor.row);
-                            // Move to last character, or stay at 0 if line is empty
-                            self.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
-                            self.update_scroll();
-                        }
-                        
-                        _ => {
-                            // Unhandled key in normal mode - ignore for now
-                        }
-                    }
+                _ => {}
+            }
+            
+            // Handle mode-specific commands
+            match self.mode {
+                Mode::Normal => {
+                    self.handle_normal_mode(&key, &mut input_handler)?;
                 }
-                
-                // Insert mode input handling
-                key if self.mode == Mode::Insert => {
-                    match key {
-                        // Regular character insertion
-                        crate::input::Key::Char(c) => {
-                            // Insert character at cursor position
-                            self.buffer.insert_char(crate::buffer::Position::new(self.cursor.row, self.cursor.col), c);
-                            // Move cursor forward
-                            self.cursor.col += 1;
-                            // Mark as modified
-                            self.modified = true;
-                        }
-                        
-                        // Enter key - split line
-                        crate::input::Key::Enter => {
-                            // Insert newline (split current line at cursor)
-                            self.buffer.insert_newline(crate::buffer::Position::new(self.cursor.row, self.cursor.col));
-                            // Move cursor to beginning of new line
-                            self.cursor.row += 1;
-                            self.cursor.col = 0;
-                            // Mark as modified
-                            self.modified = true;
-                            // Update scroll if needed
-                            self.update_scroll();
-                        }
-                        
-                        // Backspace - delete character to the left
-                        crate::input::Key::Backspace => {
-                            if self.cursor.col > 0 {
-                                // Delete character to the left in current line
-                                self.cursor.col -= 1;
-                                self.buffer.delete_char(crate::buffer::Position::new(self.cursor.row, self.cursor.col));
-                                self.modified = true;
-                            } else if self.cursor.row > 0 {
-                                // At beginning of line - join with previous line
-                                // Move cursor to end of previous line
-                                self.cursor.row -= 1;
-                                self.cursor.col = self.buffer.line_length(self.cursor.row);
-                                
-                                // Delete the newline (which will merge the lines)
-                                self.buffer.delete_char(crate::buffer::Position::new(self.cursor.row, self.cursor.col));
-                                
-                                self.modified = true;
-                                self.update_scroll();
-                            }
-                        }
-                        
-                        // Arrow keys in insert mode (for navigation without leaving insert)
-                        crate::input::Key::Left => {
-                            self.cursor_left();
-                        }
-                        crate::input::Key::Right => {
-                            self.cursor_right();
-                        }
-                        crate::input::Key::Up => {
-                            self.cursor_up();
-                            self.update_scroll();
-                        }
-                        crate::input::Key::Down => {
-                            self.cursor_down();
-                            self.update_scroll();
-                        }
-                        
-                        _ => {
-                            // Unhandled key in insert mode - ignore
-                        }
-                    }
+                Mode::Insert => {
+                    InsertModeProcessor::handle_input(self, &key);
                 }
-                
-                _ => {
-                    // Unhandled key - ignore for now
+                Mode::Command => {
+                    // TODO: Implement command mode handling
+                }
+                Mode::Visual => {
+                    // TODO: Implement visual mode handling
                 }
             }
             
             // Refresh screen after each key press
             self.refresh_screen()?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Handle Normal mode key input
+    fn handle_normal_mode(&mut self, key: &crate::input::Key, input_handler: &mut crate::input::InputHandler) -> std::io::Result<()> {
+        // First check for multi-key commands (like 'gg')
+        if let Some(command) = CommandProcessor::parse_multi_key_command(key, input_handler) {
+            CommandProcessor::execute_command(self, command);
+            return Ok(());
+        }
+        
+        // Then try single-key commands
+        if let Some(command) = CommandProcessor::parse_normal_command(key, None) {
+            CommandProcessor::execute_command(self, command);
         }
         
         Ok(())
