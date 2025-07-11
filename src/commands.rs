@@ -228,7 +228,20 @@ impl CommandProcessor {
     fn execute_edit(editor: &mut Editor, command: EditCommand) {
         match command {
             EditCommand::DeleteChar => {
-                // TODO: Implement 'x' command - delete character under cursor
+                // Delete character under cursor (x command)
+                let cursor_pos = editor.cursor_position();
+                if let Some(_deleted_char) = editor.buffer.delete_char(cursor_pos) {
+                    editor.modified = true;
+                    // Ensure cursor position is still valid after deletion
+                    let line_len = editor.buffer.line_length(editor.cursor.row);
+                    if editor.cursor.col >= line_len && line_len > 0 {
+                        editor.cursor.col = line_len - 1;
+                    } else if line_len == 0 && editor.cursor.col > 0 {
+                        editor.cursor.col = 0;
+                    }
+                    // Update scroll position if needed
+                    editor.update_scroll();
+                }
             }
             EditCommand::Undo => {
                 // TODO: Implement undo functionality
@@ -249,8 +262,12 @@ impl CommandProcessor {
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertAfter => {
-                // Move cursor right one position, then enter insert mode
-                editor.cursor_right();
+                // Move cursor right one position for append, then enter insert mode
+                let line_len = editor.buffer.line_length(editor.cursor.row);
+                if editor.cursor.col < line_len {
+                    editor.cursor.col += 1;
+                }
+                // If already at end of line, cursor.col should equal line_len for appending
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertLineEnd => {
@@ -352,17 +369,35 @@ impl InsertModeProcessor {
             
             // Arrow keys in insert mode (for navigation without leaving insert)
             Key::Left => {
-                editor.cursor_left();
+                if editor.cursor.col > 0 {
+                    editor.cursor.col -= 1;
+                }
             }
             Key::Right => {
-                editor.cursor_right();
+                let line_len = editor.buffer.line_length(editor.cursor.row);
+                // In insert mode, allow cursor to go to line_len (after last character)
+                if editor.cursor.col < line_len {
+                    editor.cursor.col += 1;
+                }
             }
             Key::Up => {
-                editor.cursor_up();
+                if editor.cursor.row > 0 {
+                    editor.cursor.row -= 1;
+                    let line_len = editor.buffer.line_length(editor.cursor.row);
+                    if editor.cursor.col > line_len {
+                        editor.cursor.col = line_len;
+                    }
+                }
                 editor.update_scroll();
             }
             Key::Down => {
-                editor.cursor_down();
+                if editor.cursor.row + 1 < editor.buffer.line_count() {
+                    editor.cursor.row += 1;
+                    let line_len = editor.buffer.line_length(editor.cursor.row);
+                    if editor.cursor.col > line_len {
+                        editor.cursor.col = line_len;
+                    }
+                }
                 editor.update_scroll();
             }
             
