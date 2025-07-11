@@ -1,6 +1,21 @@
-This is line 1
-This is line 2 with more text
-Short line
-This is a much longer line with lots of text to test horizontal scrolling
-Another line
-Final line
+hello world testing
+  indented line with spaces
+mixedCASE_words and under_scores
+punctuation, marks! test? more.
+numbers123 and 456words mixed
+
+another_test here
+final line
+hello! world? test.
+word1_word2 test-case
+punctuation: marks; everywhere,
+special@symbols#here$and%there
+numbers123 and456words
+end!
+
+Hello world! How are you?
+This is a test. It has punctuation!
+Words_with_underscores are single words.
+But word!mark and word?mark are separate.
+Special chars: @#$%^&*(){}[]
+Mixed: word123_test!punctuation?here.

@@ -61,6 +61,9 @@ pub struct Editor {
     
     /// Scroll offset for viewport
     pub scroll_offset: usize,
+    
+    /// Pending count for commands (e.g., 5j to move down 5 lines)
+    pub pending_count: Option<usize>,
 }
 
 impl Editor {
@@ -76,6 +79,7 @@ impl Editor {
             filename: None,
             status_msg: None,
             scroll_offset: 0,
+            pending_count: None,
         }
     }
     
@@ -147,15 +151,26 @@ impl Editor {
     
     /// Handle Normal mode key input
     fn handle_normal_mode(&mut self, key: &crate::input::Key, input_handler: &mut crate::input::InputHandler) -> std::io::Result<()> {
+        // Handle digit inputs for count accumulation
+        if let crate::input::Key::Char(c) = key {
+            if c.is_ascii_digit() && (*c != '0' || self.pending_count.is_some()) {
+                let digit = c.to_digit(10).unwrap() as usize;
+                self.pending_count = Some(self.pending_count.unwrap_or(0) * 10 + digit);
+                return Ok(());
+            }
+        }
+        
         // First check for multi-key commands (like 'gg')
         if let Some(command) = CommandProcessor::parse_multi_key_command(key, input_handler) {
             CommandProcessor::execute_command(self, command);
+            self.pending_count = None; // Clear count after command
             return Ok(());
         }
         
         // Then try single-key commands
-        if let Some(command) = CommandProcessor::parse_normal_command(key, None) {
+        if let Some(command) = CommandProcessor::parse_normal_command(key, self.pending_count) {
             CommandProcessor::execute_command(self, command);
+            self.pending_count = None; // Clear count after command
         }
         
         Ok(())
