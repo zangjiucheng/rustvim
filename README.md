@@ -31,24 +31,36 @@ The editor is structured into logical modules:
 3. **Safety**: Rust's ownership system ensures memory safety
 4. **Extensibility**: Trait-based design allows for future improvements
 
-## Current Status (Day 1)
+## Current Status (Day 2)
 
 ✅ **Completed:**
 - Project initialization with Cargo
-- Git repository setup
+- Git repository setup  
 - Core module structure definition
 - Basic data structures and enums
 - Architectural planning and documentation
+- **Terminal raw mode implementation**
+- **RAII guard for safe terminal restoration**
+- **ANSI escape sequence control**
+- **Interactive raw mode testing**
 
 🚧 **In Progress:**
-- Skeleton implementations for all modules
-- Basic unit tests for buffer operations
-- Documentation and code organization
+- Keystroke reading and parsing (Day 3 ready)
+- Input event loop foundation
+- Basic screen rendering framework
 
-📅 **Next Steps (Day 2):**
-- Terminal raw mode implementation
-- RAII guard for safe terminal restoration
-- Basic screen clearing and cursor control
+📅 **Next Steps (Day 3):**
+- Single-byte input reading and classification
+- Escape sequence parsing for special keys
+- Key enum mapping and event generation
+
+## Documentation
+
+For detailed implementation progress and technical details, see the **[docs/](docs/)** directory:
+
+- **[Daily Progress Summaries](docs/daily-summaries/)** - Day-by-day implementation logs
+- **[Project Architecture](docs/README.md)** - Comprehensive technical documentation
+- **[Learning Resources](docs/README.md#resources-and-references)** - Reference materials and guides
 
 ## Building and Running
 
@@ -93,11 +105,12 @@ Central coordinator that manages:
 
 ### Terminal Module (`terminal.rs`)
 
-Handles low-level terminal operations:
-- Raw mode enabling/disabling with RAII guard
-- Screen clearing and cursor positioning
-- ANSI escape sequence generation
-- Terminal size detection (planned)
+Handles low-level terminal operations using POSIX termios:
+- **Raw mode implementation** with complete termios configuration
+- **RAII guard pattern** for automatic terminal restoration
+- **ANSI escape sequence generation** for screen control
+- **Screen clearing and cursor positioning** 
+- **Safe cleanup** even on program panic or crash
 
 ### Input Module (`input.rs`)
 
