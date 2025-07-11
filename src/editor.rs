@@ -98,13 +98,29 @@ impl Editor {
                     self.running = false;
                 }
                 crate::input::Key::Esc => {
-                    // For now, ESC also quits (later it will exit insert mode)
-                    self.running = false;
+                    match self.mode {
+                        Mode::Insert => {
+                            // Exit insert mode, move cursor left if possible
+                            self.mode = Mode::Normal;
+                            if self.cursor.col > 0 {
+                                self.cursor.col -= 1;
+                            }
+                        }
+                        _ => {
+                            // For now, ESC in normal mode quits (temporary)
+                            self.running = false;
+                        }
+                    }
                 }
                 
                 // Navigation keys (hjkl and arrows) - only in Normal mode
                 key if self.mode == Mode::Normal => {
                     match key {
+                        // Insert mode entry
+                        crate::input::Key::Char('i') => {
+                            self.mode = Mode::Insert;
+                        }
+                        
                         // Vim-style navigation with arrow key support
                         crate::input::Key::Char('h') | crate::input::Key::Left => {
                             self.cursor_left();
@@ -153,6 +169,75 @@ impl Editor {
                         
                         _ => {
                             // Unhandled key in normal mode - ignore for now
+                        }
+                    }
+                }
+                
+                // Insert mode input handling
+                key if self.mode == Mode::Insert => {
+                    match key {
+                        // Regular character insertion
+                        crate::input::Key::Char(c) => {
+                            // Insert character at cursor position
+                            self.buffer.insert_char(crate::buffer::Position::new(self.cursor.row, self.cursor.col), c);
+                            // Move cursor forward
+                            self.cursor.col += 1;
+                            // Mark as modified
+                            self.modified = true;
+                        }
+                        
+                        // Enter key - split line
+                        crate::input::Key::Enter => {
+                            // Insert newline (split current line at cursor)
+                            self.buffer.insert_newline(crate::buffer::Position::new(self.cursor.row, self.cursor.col));
+                            // Move cursor to beginning of new line
+                            self.cursor.row += 1;
+                            self.cursor.col = 0;
+                            // Mark as modified
+                            self.modified = true;
+                            // Update scroll if needed
+                            self.update_scroll();
+                        }
+                        
+                        // Backspace - delete character to the left
+                        crate::input::Key::Backspace => {
+                            if self.cursor.col > 0 {
+                                // Delete character to the left in current line
+                                self.cursor.col -= 1;
+                                self.buffer.delete_char(crate::buffer::Position::new(self.cursor.row, self.cursor.col));
+                                self.modified = true;
+                            } else if self.cursor.row > 0 {
+                                // At beginning of line - join with previous line
+                                // Move cursor to end of previous line
+                                self.cursor.row -= 1;
+                                self.cursor.col = self.buffer.line_length(self.cursor.row);
+                                
+                                // Delete the newline (which will merge the lines)
+                                self.buffer.delete_char(crate::buffer::Position::new(self.cursor.row, self.cursor.col));
+                                
+                                self.modified = true;
+                                self.update_scroll();
+                            }
+                        }
+                        
+                        // Arrow keys in insert mode (for navigation without leaving insert)
+                        crate::input::Key::Left => {
+                            self.cursor_left();
+                        }
+                        crate::input::Key::Right => {
+                            self.cursor_right();
+                        }
+                        crate::input::Key::Up => {
+                            self.cursor_up();
+                            self.update_scroll();
+                        }
+                        crate::input::Key::Down => {
+                            self.cursor_down();
+                            self.update_scroll();
+                        }
+                        
+                        _ => {
+                            // Unhandled key in insert mode - ignore
                         }
                     }
                 }

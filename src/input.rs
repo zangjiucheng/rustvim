@@ -97,28 +97,60 @@ impl InputHandler {
     
     /// Parse escape sequences for special keys (arrows, home, end, etc.)
     fn parse_escape_sequence(&mut self) -> io::Result<Key> {
-        let mut buffer = [0; 1];
+        use std::time::{Duration, Instant};
+        use std::os::unix::io::AsRawFd;
         
-        // Try to read the next byte after ESC
-        // Use the same loop approach as read_key to handle blocking properly
-        loop {
+        let mut buffer = [0; 1];
+        let stdin_fd = self.stdin.as_raw_fd();
+        
+        // Set stdin to non-blocking mode temporarily
+        let flags = unsafe { libc::fcntl(stdin_fd, libc::F_GETFL) };
+        unsafe { libc::fcntl(stdin_fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+        
+        // Try to read with a timeout
+        let start = Instant::now();
+        let timeout = Duration::from_millis(100); // 100ms timeout
+        
+        let result = loop {
             match self.stdin.read(&mut buffer) {
                 Ok(0) => {
-                    // EOF or no data - keep trying
+                    // No data available - check timeout
+                    if start.elapsed() > timeout {
+                        break Ok(Key::Esc); // Timeout - treat as lone ESC
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
                     continue;
                 }
                 Ok(_) => {
-                    // Got data, break out of loop
-                    break;
+                    // Got data, continue parsing
+                    break self.parse_escape_sequence_inner(buffer[0]);
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    // No data yet - check timeout
+                    if start.elapsed() > timeout {
+                        break Ok(Key::Esc); // Timeout - treat as lone ESC
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
                 }
                 Err(_) => {
-                    // Error reading - treat as lone ESC
-                    return Ok(Key::Esc);
+                    // Other error - treat as lone ESC
+                    break Ok(Key::Esc);
                 }
             }
-        }
+        };
         
-        match buffer[0] {
+        // Restore blocking mode
+        unsafe { libc::fcntl(stdin_fd, libc::F_SETFL, flags) };
+        
+        result
+    }
+    
+    /// Parse the actual escape sequence after confirming we have data
+    fn parse_escape_sequence_inner(&mut self, first_byte: u8) -> io::Result<Key> {
+        let mut buffer = [0; 1];
+        
+        match first_byte {
             b'[' => {
                 // CSI (Control Sequence Introducer) - read the command byte
                 loop {
