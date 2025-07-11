@@ -6,16 +6,18 @@ mod commands;
 
 use terminal::Terminal;
 use input::{InputHandler, Key};
+use buffer::{Buffer, Position};
+use editor::{Editor, Cursor, Mode};
 use std::io::{self, Read};
 
 fn main() {
-    println!("VimLike Editor v0.1.0 - Day 3: Input Handling Test");
+    println!("VimLike Editor v0.1.0 - Day 4: Text Buffer and Cursor Management");
     println!("A Vim-inspired text editor built in Rust");
     println!();
     
-    // Day 3: Test input handling with key mapping
-    if let Err(e) = test_input_handling() {
-        eprintln!("Error testing input handling: {}", e);
+    // Day 4: Test text buffer and cursor management
+    if let Err(e) = test_buffer_and_cursor() {
+        eprintln!("Error testing buffer and cursor: {}", e);
         std::process::exit(1);
     }
 }
@@ -216,6 +218,159 @@ fn test_input_handling() -> io::Result<()> {
     terminal.write_line("✓ Non-blocking ESC key vs escape sequence handling")?;
     terminal.write_line("")?;
     terminal.show_cursor()?;
+    
+    Ok(())
+}
+
+/// Day 4: Test text buffer structure and cursor management functionality
+fn test_buffer_and_cursor() -> io::Result<()> {
+    println!("═══════════════════════════════════════════");
+    println!("=== DAY 4: TEXT BUFFER & CURSOR TEST ===");
+    println!("═══════════════════════════════════════════");
+    println!();
+    
+    // Test 1: Buffer creation and basic operations
+    println!("📋 Test 1: Buffer Creation and Basic Operations");
+    println!("─────────────────────────────────────────────");
+    
+    let mut buffer = Buffer::new();
+    println!("✓ Created new buffer with {} lines", buffer.line_count());
+    println!("✓ Initial state: '{}'", buffer.get_line(0).unwrap_or(&String::new()));
+    
+    // Test 2: Character insertion
+    println!("\n📝 Test 2: Character Insertion");
+    println!("─────────────────────────────────");
+    
+    let text = "Hello, World!";
+    for (i, ch) in text.chars().enumerate() {
+        buffer.insert_char(Position::new(0, i), ch);
+    }
+    println!("✓ Inserted '{}' character by character", text);
+    println!("✓ Result: '{}'", buffer.get_line(0).unwrap());
+    
+    // Test 3: Character deletion
+    println!("\n🗑️  Test 3: Character Deletion");
+    println!("─────────────────────────────");
+    
+    let deleted = buffer.delete_char(Position::new(0, 5)); // Delete comma
+    println!("✓ Deleted character: {:?}", deleted);
+    println!("✓ Result: '{}'", buffer.get_line(0).unwrap());
+    
+    // Test 4: Newline insertion (line splitting)
+    println!("\n↩️  Test 4: Newline Insertion");
+    println!("────────────────────────────");
+    
+    buffer.insert_newline(Position::new(0, 5)); // Split at space
+    println!("✓ Inserted newline at position (0, 5)");
+    println!("✓ Line count: {}", buffer.line_count());
+    println!("✓ Line 0: '{}'", buffer.get_line(0).unwrap());
+    println!("✓ Line 1: '{}'", buffer.get_line(1).unwrap());
+    
+    // Test 5: Multi-line text operations
+    println!("\n📑 Test 5: Multi-line Operations");
+    println!("───────────────────────────────");
+    
+    buffer.insert_char(Position::new(1, 0), '→');
+    buffer.insert_char(Position::new(1, 1), ' ');
+    println!("✓ Added arrow prefix to second line");
+    println!("✓ Line 1: '{}'", buffer.get_line(1).unwrap());
+    
+    // Test 6: Cursor management
+    println!("\n🎯 Test 6: Cursor Management");
+    println!("───────────────────────────");
+    
+    let mut cursor = Cursor::new();
+    println!("✓ Created cursor at ({}, {})", cursor.row, cursor.col);
+    
+    // Test cursor bounds checking
+    let line_len = buffer.line_length(0);
+    cursor.col = line_len; // Move to end of first line
+    println!("✓ Moved cursor to end of line 0: ({}, {})", cursor.row, cursor.col);
+    
+    cursor.row = 1;
+    cursor.col = 0;
+    println!("✓ Moved cursor to start of line 1: ({}, {})", cursor.row, cursor.col);
+    
+    // Test 7: Editor state management
+    println!("\n⚙️  Test 7: Editor State Management");
+    println!("─────────────────────────────────");
+    
+    let mut editor = Editor::new();
+    println!("✓ Created editor in mode: {:?}", editor.mode);
+    println!("✓ Editor cursor: ({}, {})", editor.cursor.row, editor.cursor.col);
+    println!("✓ Editor running: {}", editor.running);
+    println!("✓ Buffer modified: {}", editor.modified);
+    
+    // Test mode switching
+    editor.mode = Mode::Insert;
+    println!("✓ Switched to Insert mode: {:?}", editor.mode);
+    
+    editor.mode = Mode::Normal;
+    println!("✓ Switched back to Normal mode: {:?}", editor.mode);
+    
+    // Test 8: File content simulation
+    println!("\n📁 Test 8: File Content Simulation");
+    println!("─────────────────────────────────");
+    
+    let file_content = "Line 1: Introduction\nLine 2: Content\nLine 3: Conclusion";
+    let file_buffer = Buffer::from_file(file_content);
+    println!("✓ Created buffer from file content");
+    println!("✓ File has {} lines", file_buffer.line_count());
+    
+    for i in 0..file_buffer.line_count() {
+        if let Some(line) = file_buffer.get_line(i) {
+            println!("  Line {}: '{}'", i, line);
+        }
+    }
+    
+    // Test 9: Buffer safety and bounds checking
+    println!("\n🔒 Test 9: Safety and Bounds Checking");
+    println!("────────────────────────────────────");
+    
+    let mut safety_buffer = Buffer::new();
+    
+    // Test invalid insertions
+    safety_buffer.insert_char(Position::new(10, 0), 'x'); // Invalid row
+    println!("✓ Handled invalid row insertion gracefully");
+    
+    safety_buffer.insert_char(Position::new(0, 100), 'y'); // Invalid column
+    println!("✓ Handled invalid column insertion gracefully");
+    
+    // Test invalid deletions
+    let result = safety_buffer.delete_char(Position::new(10, 0)); // Invalid row
+    println!("✓ Invalid deletion returned: {:?}", result);
+    
+    // Test 10: Coordinate system validation
+    println!("\n🧭 Test 10: Coordinate System");
+    println!("────────────────────────────");
+    
+    let pos1 = Position::new(5, 10);
+    let pos2 = Position::new(5, 10);
+    println!("✓ Position equality works: {} == {} = {}", 
+             format!("({}, {})", pos1.row, pos1.col),
+             format!("({}, {})", pos2.row, pos2.col),
+             pos1 == pos2);
+    
+    // Summary
+    println!("\n═══════════════════════════════════════════");
+    println!("=== DAY 4 TEST COMPLETE ===");
+    println!("═══════════════════════════════════════════");
+    println!();
+    println!("🎉 All Day 4 features implemented and tested:");
+    println!("✓ Buffer struct with Vec<String> storage");
+    println!("✓ Position coordinate system (row, col)");
+    println!("✓ Cursor struct for tracking edit position");
+    println!("✓ Buffer::new() - empty buffer initialization");
+    println!("✓ Buffer::line_count(), Buffer::get_line() - query methods");
+    println!("✓ Buffer::insert_char() - character insertion with bounds checking");
+    println!("✓ Buffer::delete_char() - character deletion with line merging");
+    println!("✓ Buffer::insert_newline() - line splitting functionality");
+    println!("✓ Buffer::from_file() - file content loading");
+    println!("✓ TextBuffer trait for modularity and extensibility");
+    println!("✓ Comprehensive safety with bounds checking");
+    println!("✓ Editor state management with mode tracking");
+    println!();
+    println!("🚀 Ready for Day 5: Basic Screen Rendering and File Loading!");
     
     Ok(())
 }

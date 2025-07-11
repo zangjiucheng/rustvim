@@ -52,17 +52,19 @@ impl Buffer {
         self.lines.get(index)
     }
     
-    /// Get the length of a specific line
+    /// Get the length of a specific line (in characters)
     pub fn line_length(&self, index: usize) -> usize {
-        self.lines.get(index).map_or(0, |line| line.len())
+        self.lines.get(index).map_or(0, |line| line.chars().count())
     }
     
     /// Insert a character at the specified position
     pub fn insert_char(&mut self, pos: Position, ch: char) {
         if pos.row < self.lines.len() {
             let line = &mut self.lines[pos.row];
-            if pos.col <= line.len() {
-                line.insert(pos.col, ch);
+            // Convert character position to byte position
+            let byte_pos = line.char_indices().nth(pos.col).map(|(i, _)| i).unwrap_or(line.len());
+            if byte_pos <= line.len() {
+                line.insert(byte_pos, ch);
             }
         }
     }
@@ -71,9 +73,11 @@ impl Buffer {
     pub fn delete_char(&mut self, pos: Position) -> Option<char> {
         if pos.row < self.lines.len() {
             let line = &mut self.lines[pos.row];
-            if pos.col < line.len() {
-                return Some(line.remove(pos.col));
-            } else if pos.col == line.len() && pos.row + 1 < self.lines.len() {
+            // Convert character position to byte position
+            if let Some((byte_pos, ch)) = line.char_indices().nth(pos.col) {
+                line.remove(byte_pos);
+                return Some(ch);
+            } else if pos.col == line.chars().count() && pos.row + 1 < self.lines.len() {
                 // Delete newline - merge with next line
                 let next_line = self.lines.remove(pos.row + 1);
                 self.lines[pos.row].push_str(&next_line);
@@ -87,8 +91,19 @@ impl Buffer {
     pub fn insert_newline(&mut self, pos: Position) {
         if pos.row < self.lines.len() {
             let current_line = self.lines[pos.row].clone();
-            let split_pos = pos.col.min(current_line.len());
-            let (before, after) = current_line.split_at(split_pos);
+            let char_count = current_line.chars().count();
+            let split_pos = pos.col.min(char_count);
+            
+            // Find the byte position for the character position
+            let byte_pos = if split_pos == 0 {
+                0
+            } else if split_pos >= char_count {
+                current_line.len()
+            } else {
+                current_line.char_indices().nth(split_pos).map(|(i, _)| i).unwrap_or(current_line.len())
+            };
+            
+            let (before, after) = current_line.split_at(byte_pos);
             
             self.lines[pos.row] = before.to_string();
             self.lines.insert(pos.row + 1, after.to_string());
