@@ -78,18 +78,93 @@ impl Editor {
         }
     }
     
-    /// Main editor event loop (to be implemented)
+    /// Main editor event loop
     pub fn run(&mut self) -> std::io::Result<()> {
         // Enter raw mode
         let _raw_guard = self.terminal.enter_raw_mode()?;
         
+        // Create input handler
+        let mut input_handler = crate::input::InputHandler::new();
+        
         // Initial screen refresh
         self.refresh_screen()?;
         
-        // TODO: Main event loop will be implemented in Day 6
-        // For now, just demonstrate rendering
-        println!("Day 5: Screen rendering implemented. Press any key to continue...");
-        std::io::Read::read(&mut std::io::stdin(), &mut [0u8; 1])?;
+        // Main event loop
+        while self.running {
+            // Read key input
+            match input_handler.read_key()? {
+                // Quit commands
+                crate::input::Key::Ctrl('q') => {
+                    self.running = false;
+                }
+                crate::input::Key::Esc => {
+                    // For now, ESC also quits (later it will exit insert mode)
+                    self.running = false;
+                }
+                
+                // Navigation keys (hjkl and arrows) - only in Normal mode
+                key if self.mode == Mode::Normal => {
+                    match key {
+                        // Vim-style navigation with arrow key support
+                        crate::input::Key::Char('h') | crate::input::Key::Left => {
+                            self.cursor_left();
+                            self.update_scroll();
+                        }
+                        crate::input::Key::Char('j') | crate::input::Key::Down => {
+                            self.cursor_down();
+                            self.update_scroll();
+                        }
+                        crate::input::Key::Char('k') | crate::input::Key::Up => {
+                            self.cursor_up();
+                            self.update_scroll();
+                        }
+                        crate::input::Key::Char('l') | crate::input::Key::Right => {
+                            self.cursor_right();
+                            self.update_scroll();
+                        }
+                        
+                        // Line navigation
+                        crate::input::Key::Char('0') => {
+                            self.cursor.col = 0;
+                        }
+                        crate::input::Key::Char('$') => {
+                            let line_len = self.buffer.line_length(self.cursor.row);
+                            // Move to last character, or stay at 0 if line is empty
+                            self.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
+                        }
+                        
+                        // File navigation
+                        crate::input::Key::Char('g') => {
+                            // Wait for second 'g' to go to top of file
+                            if let Ok(crate::input::Key::Char('g')) = input_handler.read_key() {
+                                self.cursor.row = 0;
+                                self.cursor.col = 0;
+                                self.update_scroll();
+                            }
+                        }
+                        crate::input::Key::Char('G') => {
+                            // Go to end of file
+                            self.cursor.row = self.buffer.line_count().saturating_sub(1);
+                            let line_len = self.buffer.line_length(self.cursor.row);
+                            // Move to last character, or stay at 0 if line is empty
+                            self.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
+                            self.update_scroll();
+                        }
+                        
+                        _ => {
+                            // Unhandled key in normal mode - ignore for now
+                        }
+                    }
+                }
+                
+                _ => {
+                    // Unhandled key - ignore for now
+                }
+            }
+            
+            // Refresh screen after each key press
+            self.refresh_screen()?;
+        }
         
         Ok(())
     }
@@ -219,7 +294,8 @@ impl Editor {
             let new_row = self.cursor.row - 1;
             let line_len = self.buffer.line_length(new_row);
             self.cursor.row = new_row;
-            self.cursor.col = self.cursor.col.min(line_len);
+            // In normal mode, cursor should not go past the last character
+            self.cursor.col = self.cursor.col.min(line_len.saturating_sub(1));
         }
     }
     
@@ -229,7 +305,8 @@ impl Editor {
             let new_row = self.cursor.row + 1;
             let line_len = self.buffer.line_length(new_row);
             self.cursor.row = new_row;
-            self.cursor.col = self.cursor.col.min(line_len);
+            // In normal mode, cursor should not go past the last character
+            self.cursor.col = self.cursor.col.min(line_len.saturating_sub(1));
         }
     }
     
@@ -237,23 +314,19 @@ impl Editor {
     pub fn cursor_left(&mut self) {
         if self.cursor.col > 0 {
             self.cursor.col -= 1;
-        } else if self.cursor.row > 0 {
-            // Move to end of previous line
-            self.cursor.row -= 1;
-            self.cursor.col = self.buffer.line_length(self.cursor.row);
         }
+        // For now, don't wrap to previous line (keep it simple for Day 6)
     }
     
     /// Move cursor right one position
     pub fn cursor_right(&mut self) {
         let line_len = self.buffer.line_length(self.cursor.row);
-        if self.cursor.col < line_len {
+        // In normal mode, don't go past the last character
+        let max_col = line_len.saturating_sub(1);
+        if self.cursor.col < max_col {
             self.cursor.col += 1;
-        } else if self.cursor.row + 1 < self.buffer.line_count() {
-            // Move to start of next line
-            self.cursor.row += 1;
-            self.cursor.col = 0;
         }
+        // For now, don't wrap to next line (keep it simple for Day 6)
     }
     
     /// Get current cursor position as Position
