@@ -163,6 +163,14 @@ impl Motion for MovementCommand {
         
         (temp_row, temp_col)
     }
+    
+    fn is_line_motion(&self) -> bool {
+        match self {
+            MovementCommand::FileStart |  // gg - go to start of file
+            MovementCommand::FileEnd => true,  // G - go to end of file
+            _ => false,
+        }
+    }
 }
 
 /// Edit commands for text modification
@@ -203,7 +211,32 @@ impl Command for EditCommand {
                 OperatorExecutor::execute_delete_motion(editor, motion.clone(), count);
                 Ok(())
             }
-            _ => Ok(()), // TODO: Implement other commands
+            EditCommand::YankLine => {
+                let count = editor.pending_count.unwrap_or(1);
+                OperatorExecutor::execute_yank_line(editor, count);
+                Ok(())
+            }
+            EditCommand::Yank(motion) => {
+                let count = editor.pending_count.unwrap_or(1);
+                OperatorExecutor::execute_yank_motion(editor, motion.clone(), count);
+                Ok(())
+            }
+            EditCommand::PasteAfter => {
+                OperatorExecutor::execute_paste_after(editor);
+                Ok(())
+            }
+            EditCommand::PasteBefore => {
+                OperatorExecutor::execute_paste_before(editor);
+                Ok(())
+            }
+            EditCommand::Undo => {
+                // TODO: Implement undo functionality
+                Ok(())
+            }
+            EditCommand::Redo => {
+                // TODO: Implement redo functionality
+                Ok(())
+            }
         }
     }
 }
@@ -499,7 +532,10 @@ impl TextOperations {
     /// Delete character at cursor position
     pub fn delete_char_at_cursor(editor: &mut Editor) {
         let cursor_pos = editor.cursor_position();
-        if let Some(_deleted_char) = editor.buffer.delete_char(cursor_pos) {
+        if let Some(deleted_char) = editor.buffer.delete_char(cursor_pos) {
+            // Store the deleted character in the register
+            editor.register.store_text(deleted_char.to_string());
+            
             editor.modified = true;
             let line_len = editor.buffer.line_length(editor.cursor.row);
             if editor.cursor.col >= line_len && line_len > 0 {
@@ -612,6 +648,11 @@ impl TextOperations {
         }
     }
     
+    /// Extract text from a range without modifying the buffer (for yank operations)
+    pub fn extract_range(editor: &Editor, start: (usize, usize), end: (usize, usize)) -> String {
+        editor.buffer.extract_range(start, end)
+    }
+    
     /// Ensure cursor is within valid buffer bounds
     pub fn clamp_cursor_to_buffer(editor: &mut Editor) {
         editor.cursor.row = editor.cursor.row.min(editor.buffer.line_count().saturating_sub(1));
@@ -715,7 +756,25 @@ impl OperatorExecutor {
     /// Execute delete line command (dd)
     pub fn execute_delete_line(editor: &mut Editor, count: usize) {
         let start_row = editor.cursor.row;
+        let mut deleted_lines = Vec::new();
         
+        // First, collect the lines to be deleted for the register
+        for i in 0..count {
+            let row = start_row + i;
+            if row < editor.buffer.line_count() {
+                if let Some(line) = editor.buffer.get_line(row) {
+                    deleted_lines.push(line.clone());
+                }
+            }
+        }
+        
+        // Store in register
+        if !deleted_lines.is_empty() {
+            let deleted_text = deleted_lines.join("\n") + "\n";
+            editor.register.store_lines(deleted_text);
+        }
+        
+        // Now delete the lines
         for _ in 0..count {
             if editor.buffer.line_count() > 1 {
                 if let Some(_deleted_line) = editor.buffer.get_line(editor.cursor.row) {
@@ -750,6 +809,18 @@ impl OperatorExecutor {
         let start_pos = (editor.cursor.row, editor.cursor.col);
         let end_pos = motion.calculate_end_position(editor, start_pos, count);
         
+        // Extract text for register before deleting
+        let deleted_text = TextOperations::extract_range(editor, start_pos, end_pos);
+        
+        // Store in register
+        if !deleted_text.is_empty() {
+            if motion.is_line_motion() {
+                editor.register.store_lines(deleted_text);
+            } else {
+                editor.register.store_text(deleted_text);
+            }
+        }
+        
         let final_cursor_pos = match motion {
             MovementCommand::WordBackward | 
             MovementCommand::LineStart | 
@@ -767,6 +838,174 @@ impl OperatorExecutor {
         TextOperations::clamp_cursor_to_buffer(editor);
         
         editor.modified = true;
+        editor.update_scroll();
+    }
+    
+    /// Execute yank line command (yy)
+    pub fn execute_yank_line(editor: &mut Editor, count: usize) {
+        let start_row = editor.cursor.row;
+        let mut yanked_lines = Vec::new();
+        
+        for i in 0..count {
+            let row = start_row + i;
+            if row < editor.buffer.line_count() {
+                if let Some(line) = editor.buffer.get_line(row) {
+                    yanked_lines.push(line.clone());
+                }
+            }
+        }
+        
+        if !yanked_lines.is_empty() {
+            let yanked_text = yanked_lines.join("\n") + "\n";
+            editor.register.store_lines(yanked_text);
+            
+            // Set status message
+            let message = if count == 1 {
+                "1 line yanked".to_string()
+            } else {
+                format!("{} lines yanked", count)
+            };
+            editor.status_msg = Some(message);
+        }
+    }
+    
+    /// Execute yank with motion command (yw, y$, etc.)
+    pub fn execute_yank_motion(editor: &mut Editor, motion: MovementCommand, count: usize) {
+        let start_pos = (editor.cursor.row, editor.cursor.col);
+        let end_pos = motion.calculate_end_position(editor, start_pos, count);
+        
+        // Extract text from the range
+        let yanked_text = TextOperations::extract_range(editor, start_pos, end_pos);
+        
+        if !yanked_text.is_empty() {
+            // Determine if this is a line-based motion
+            let is_line_motion = motion.is_line_motion();
+            
+            if is_line_motion {
+                editor.register.store_lines(yanked_text);
+            } else {
+                editor.register.store_text(yanked_text);
+            }
+            
+            // Set status message
+            let message = if is_line_motion {
+                let line_count = editor.register.content.matches('\n').count();
+                if line_count <= 1 {
+                    "1 line yanked".to_string()
+                } else {
+                    format!("{} lines yanked", line_count)
+                }
+            } else {
+                let char_count = editor.register.content.len();
+                if char_count == 1 {
+                    "1 character yanked".to_string()
+                } else {
+                    format!("{} characters yanked", char_count)
+                }
+            };
+            editor.status_msg = Some(message);
+        }
+    }
+    
+    /// Execute paste after cursor (p)
+    pub fn execute_paste_after(editor: &mut Editor) {
+        if editor.register.is_empty() {
+            editor.status_msg = Some("Nothing to paste".to_string());
+            return;
+        }
+        
+        if editor.register.is_line_based {
+            // Insert lines after current line
+            let lines: Vec<&str> = editor.register.content.trim_end_matches('\n').split('\n').collect();
+            for (i, line) in lines.iter().enumerate() {
+                let insert_row = editor.cursor.row + 1 + i;
+                editor.buffer.insert_line(insert_row, line.to_string());
+            }
+            
+            // Move cursor to the start of the first inserted line
+            if lines.len() > 0 {
+                editor.cursor.row += 1;
+                editor.cursor.col = 0;
+                
+                // Move to first non-blank character
+                let line_len = editor.buffer.line_length(editor.cursor.row);
+                for col in 0..line_len {
+                    if let Some(ch) = editor.buffer.get_char((editor.cursor.row, col)) {
+                        if !ch.is_whitespace() {
+                            editor.cursor.col = col;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Insert text after cursor position
+            let chars: Vec<char> = editor.register.content.chars().collect();
+            let mut insert_col = editor.cursor.col + 1;
+            
+            // Clamp insert position to line length
+            let line_len = editor.buffer.line_length(editor.cursor.row);
+            if insert_col > line_len {
+                insert_col = line_len;
+            }
+            
+            for (i, ch) in chars.iter().enumerate() {
+                let pos = crate::buffer::Position::new(editor.cursor.row, insert_col + i);
+                editor.buffer.insert_char(pos, *ch);
+            }
+            
+            // Move cursor to end of pasted text
+            editor.cursor.col = insert_col + chars.len().saturating_sub(1);
+        }
+        
+        editor.modified = true;
+        TextOperations::clamp_cursor_to_buffer(editor);
+        editor.update_scroll();
+    }
+    
+    /// Execute paste before cursor (P)
+    pub fn execute_paste_before(editor: &mut Editor) {
+        if editor.register.is_empty() {
+            editor.status_msg = Some("Nothing to paste".to_string());
+            return;
+        }
+        
+        if editor.register.is_line_based {
+            // Insert lines before current line
+            let lines: Vec<&str> = editor.register.content.trim_end_matches('\n').split('\n').collect();
+            for (i, line) in lines.iter().enumerate() {
+                let insert_row = editor.cursor.row + i;
+                editor.buffer.insert_line(insert_row, line.to_string());
+            }
+            
+            // Move cursor to the start of the first inserted line
+            editor.cursor.col = 0;
+            
+            // Move to first non-blank character
+            let line_len = editor.buffer.line_length(editor.cursor.row);
+            for col in 0..line_len {
+                if let Some(ch) = editor.buffer.get_char((editor.cursor.row, col)) {
+                    if !ch.is_whitespace() {
+                        editor.cursor.col = col;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Insert text at cursor position
+            let chars: Vec<char> = editor.register.content.chars().collect();
+            
+            for (i, ch) in chars.iter().enumerate() {
+                let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col + i);
+                editor.buffer.insert_char(pos, *ch);
+            }
+            
+            // Move cursor to end of pasted text
+            editor.cursor.col += chars.len().saturating_sub(1);
+        }
+        
+        editor.modified = true;
+        TextOperations::clamp_cursor_to_buffer(editor);
         editor.update_scroll();
     }
 }
@@ -800,12 +1039,20 @@ impl CommandProcessor {
                     let count = editor.pending_count.unwrap_or(1);
                     OperatorExecutor::execute_delete_line(editor, count);
                 }
+                crate::input::Key::Char('y') if matches!(operator, Operator::Yank) => {
+                    let count = editor.pending_count.unwrap_or(1);
+                    OperatorExecutor::execute_yank_line(editor, count);
+                }
                 crate::input::Key::Char('g') => {
                     if let Ok(crate::input::Key::Char('g')) = input_handler.read_key() {
                         match operator {
                             Operator::Delete => {
                                 let count = editor.pending_count.unwrap_or(1);
                                 OperatorExecutor::execute_delete_motion(editor, MovementCommand::FileStart, count);
+                            }
+                            Operator::Yank => {
+                                let count = editor.pending_count.unwrap_or(1);
+                                OperatorExecutor::execute_yank_motion(editor, MovementCommand::FileStart, count);
                             }
                             _ => {} // TODO: Implement other operators
                         }
@@ -818,6 +1065,10 @@ impl CommandProcessor {
                             Operator::Delete => {
                                 let count = editor.pending_count.unwrap_or(1);
                                 OperatorExecutor::execute_delete_motion(editor, motion, count);
+                            }
+                            Operator::Yank => {
+                                let count = editor.pending_count.unwrap_or(1);
+                                OperatorExecutor::execute_yank_motion(editor, motion, count);
                             }
                             _ => {} // TODO: Implement other operators
                         }

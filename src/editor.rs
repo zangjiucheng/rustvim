@@ -67,6 +67,45 @@ pub struct Editor {
     
     /// Pending operator for commands (e.g., d waiting for motion)
     pub pending_operator: Option<crate::commands::Operator>,
+    
+    /// Register to hold yanked/deleted text
+    pub register: Register,
+}
+
+/// Represents the content and type of yanked/deleted text
+#[derive(Debug, Clone)]
+pub struct Register {
+    /// The stored text content
+    pub content: String,
+    /// Whether the content is line-based (whole lines) or character-based
+    pub is_line_based: bool,
+}
+
+impl Register {
+    /// Create a new empty register
+    pub fn new() -> Self {
+        Self {
+            content: String::new(),
+            is_line_based: false,
+        }
+    }
+    
+    /// Store text as character-based content
+    pub fn store_text(&mut self, text: String) {
+        self.content = text;
+        self.is_line_based = false;
+    }
+    
+    /// Store text as line-based content (whole lines)
+    pub fn store_lines(&mut self, text: String) {
+        self.content = text;
+        self.is_line_based = true;
+    }
+    
+    /// Check if the register is empty
+    pub fn is_empty(&self) -> bool {
+        self.content.is_empty()
+    }
 }
 
 impl Editor {
@@ -84,6 +123,7 @@ impl Editor {
             scroll_offset: 0,
             pending_count: None,
             pending_operator: None,
+            register: Register::new(),
         }
     }
     

@@ -119,6 +119,86 @@ impl Buffer {
     pub fn is_empty(&self) -> bool {
         self.lines.len() == 1 && self.lines[0].is_empty()
     }
+    
+    /// Insert a new line at the specified row index
+    pub fn insert_line(&mut self, row: usize, content: String) {
+        if row <= self.lines.len() {
+            self.lines.insert(row, content);
+        }
+    }
+    
+    /// Get a character at the specified position
+    pub fn get_char(&self, pos: (usize, usize)) -> Option<char> {
+        let (row, col) = pos;
+        if let Some(line) = self.lines.get(row) {
+            line.chars().nth(col)
+        } else {
+            None
+        }
+    }
+    
+    /// Extract text from a range (for yank operations)
+    pub fn extract_range(&self, start: (usize, usize), end: (usize, usize)) -> String {
+        let (start_row, start_col) = start;
+        let (end_row, end_col) = end;
+        
+        let (from_row, from_col, to_row, to_col) = if start_row < end_row || 
+            (start_row == end_row && start_col <= end_col) {
+            (start_row, start_col, end_row, end_col)
+        } else {
+            (end_row, end_col, start_row, start_col)
+        };
+        
+        if from_row == to_row {
+            // Single line extraction
+            if let Some(line) = self.lines.get(from_row) {
+                let chars: Vec<char> = line.chars().collect();
+                let start_idx = from_col.min(chars.len());
+                let end_idx = to_col.min(chars.len());
+                if start_idx < end_idx {
+                    chars[start_idx..end_idx].iter().collect()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            // Multi-line extraction
+            let mut result = String::new();
+            
+            // First line: from start_col to end of line
+            if let Some(line) = self.lines.get(from_row) {
+                let chars: Vec<char> = line.chars().collect();
+                let start_idx = from_col.min(chars.len());
+                if start_idx < chars.len() {
+                    result.push_str(&chars[start_idx..].iter().collect::<String>());
+                }
+                result.push('\n');
+            }
+            
+            // Middle lines: entire lines
+            for row in (from_row + 1)..to_row {
+                if let Some(line) = self.lines.get(row) {
+                    result.push_str(line);
+                    result.push('\n');
+                }
+            }
+            
+            // Last line: from start to end_col
+            if to_row < self.lines.len() {
+                if let Some(line) = self.lines.get(to_row) {
+                    let chars: Vec<char> = line.chars().collect();
+                    let end_idx = to_col.min(chars.len());
+                    if end_idx > 0 {
+                        result.push_str(&chars[0..end_idx].iter().collect::<String>());
+                    }
+                }
+            }
+            
+            result
+        }
+    }
 }
 
 /// Trait for text buffer operations (for future extensibility)
@@ -193,5 +273,37 @@ mod tests {
         assert_eq!(buffer.line_count(), 2);
         assert_eq!(buffer.get_line(0), Some(&"h".to_string()));
         assert_eq!(buffer.get_line(1), Some(&"i".to_string()));
+    }
+    
+    #[test]
+    fn test_yank_paste_operations() {
+        let mut buffer = Buffer::new();
+        buffer.insert_char(Position::new(0, 0), 'h');
+        buffer.insert_char(Position::new(0, 1), 'e');
+        buffer.insert_char(Position::new(0, 2), 'l');
+        buffer.insert_char(Position::new(0, 3), 'l');
+        buffer.insert_char(Position::new(0, 4), 'o');
+        buffer.insert_newline(Position::new(0, 5));
+        buffer.insert_char(Position::new(1, 0), 'w');
+        buffer.insert_char(Position::new(1, 1), 'o');
+        buffer.insert_char(Position::new(1, 2), 'r');
+        buffer.insert_char(Position::new(1, 3), 'l');
+        buffer.insert_char(Position::new(1, 4), 'd');
+        
+        // Extract "lo\nwor" - from position (0,3) which is 'l' to position (1,3) which is 'l' (exclusive)
+        let yanked = buffer.extract_range((0, 3), (1, 3));
+        assert_eq!(yanked, "lo\nwor");
+        
+        // Add a new line for testing
+        buffer.insert_newline(Position::new(1, 5));
+        
+        // Paste at beginning of new line
+        buffer.insert_char(Position::new(2, 0), 'P');
+        buffer.insert_char(Position::new(2, 1), 'A');
+        buffer.insert_char(Position::new(2, 2), 'S');
+        buffer.insert_char(Position::new(2, 3), 'T');
+        buffer.insert_char(Position::new(2, 4), 'E');
+        
+        assert_eq!(buffer.get_line(2), Some(&"PASTE".to_string()));
     }
 }
