@@ -64,6 +64,9 @@ pub struct Editor {
     
     /// Pending count for commands (e.g., 5j to move down 5 lines)
     pub pending_count: Option<usize>,
+    
+    /// Pending operator for commands (e.g., d waiting for motion)
+    pub pending_operator: Option<crate::commands::Operator>,
 }
 
 impl Editor {
@@ -80,6 +83,7 @@ impl Editor {
             status_msg: None,
             scroll_offset: 0,
             pending_count: None,
+            pending_operator: None,
         }
     }
     
@@ -160,16 +164,85 @@ impl Editor {
             }
         }
         
+        // Check if we have a pending operator (operator-pending mode)
+        if let Some(operator) = &self.pending_operator {
+            let operator = operator.clone();
+            self.pending_operator = None; // Clear pending operator
+            
+            // Handle operator + motion combinations
+            match key {
+                // Special case: operator + same operator (e.g., dd, yy)
+                crate::input::Key::Char('d') if matches!(operator, crate::commands::Operator::Delete) => {
+                    crate::commands::CommandProcessor::execute_delete_line(self);
+                }
+                // Handle 'g' as part of multi-key commands like dgg
+                crate::input::Key::Char('g') => {
+                    // Wait for second 'g' to complete 'gg' motion
+                    if let Ok(crate::input::Key::Char('g')) = input_handler.read_key() {
+                        match operator {
+                            crate::commands::Operator::Delete => {
+                                crate::commands::CommandProcessor::execute_delete_motion(self, crate::commands::MovementCommand::FileStart);
+                            }
+                            crate::commands::Operator::Yank => {
+                                // TODO: Implement yank operator in Day 11
+                            }
+                            crate::commands::Operator::Change => {
+                                // TODO: Implement change operator later
+                            }
+                        }
+                    } else {
+                        // Invalid second key, cancel operator
+                        // TODO: Could provide user feedback here
+                    }
+                }
+                _ => {
+                    // Try to parse as a motion
+                    if let Some(crate::commands::NormalCommand::Movement(motion)) = 
+                        crate::commands::CommandProcessor::parse_normal_command(key, self.pending_count) {
+                        match operator {
+                            crate::commands::Operator::Delete => {
+                                crate::commands::CommandProcessor::execute_delete_motion(self, motion);
+                            }
+                            crate::commands::Operator::Yank => {
+                                // TODO: Implement yank operator in Day 11
+                            }
+                            crate::commands::Operator::Change => {
+                                // TODO: Implement change operator later
+                            }
+                        }
+                    } else {
+                        // Invalid motion, cancel operator
+                        // TODO: Could provide user feedback here
+                    }
+                }
+            }
+            self.pending_count = None; // Clear count after operator
+            return Ok(());
+        }
+        
+        // Handle operator keys (d, y, c)
+        match key {
+            crate::input::Key::Char('d') => {
+                self.pending_operator = Some(crate::commands::Operator::Delete);
+                return Ok(());
+            }
+            crate::input::Key::Char('y') => {
+                self.pending_operator = Some(crate::commands::Operator::Yank);
+                return Ok(());
+            }
+            _ => {}
+        }
+        
         // First check for multi-key commands (like 'gg')
-        if let Some(command) = CommandProcessor::parse_multi_key_command(key, input_handler) {
-            CommandProcessor::execute_command(self, command);
+        if let Some(command) = crate::commands::CommandProcessor::parse_multi_key_command(key, input_handler) {
+            crate::commands::CommandProcessor::execute_command(self, command);
             self.pending_count = None; // Clear count after command
             return Ok(());
         }
         
         // Then try single-key commands
-        if let Some(command) = CommandProcessor::parse_normal_command(key, self.pending_count) {
-            CommandProcessor::execute_command(self, command);
+        if let Some(command) = crate::commands::CommandProcessor::parse_normal_command(key, self.pending_count) {
+            crate::commands::CommandProcessor::execute_command(self, command);
             self.pending_count = None; // Clear count after command
         }
         

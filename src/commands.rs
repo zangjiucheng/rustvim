@@ -3,6 +3,14 @@
 use crate::editor::{Editor, Mode};
 use crate::input::Key;
 
+/// Represents an operator waiting for a motion
+#[derive(Debug, Clone)]
+pub enum Operator {
+    Delete,    // d
+    Yank,      // y
+    Change,    // c (future)
+}
+
 /// Represents different types of commands in Normal mode
 #[derive(Debug, Clone)]
 #[allow(unused)]
@@ -585,6 +593,445 @@ impl CommandProcessor {
         
         editor.cursor.row = row;
         editor.cursor.col = col;
+    }
+    
+    /// Execute delete line command (dd)
+    pub fn execute_delete_line(editor: &mut Editor) {
+        let count = editor.pending_count.unwrap_or(1);
+        let start_row = editor.cursor.row;
+        
+        // Delete 'count' lines starting from current line
+        for _ in 0..count {
+            if editor.buffer.line_count() > 1 {
+                // Remove the line at cursor row
+                if let Some(_deleted_line) = editor.buffer.get_line(editor.cursor.row) {
+                    // TODO: Store deleted text in register for yanking (Day 11)
+                    
+                    // Remove the line from buffer - we'll need to implement this
+                    // For now, let's simulate by replacing with empty line
+                    // We'll need a proper delete_line method in buffer
+                    Self::delete_line_at(editor, editor.cursor.row);
+                    
+                    // Adjust cursor position
+                    if editor.cursor.row >= editor.buffer.line_count() {
+                        editor.cursor.row = editor.buffer.line_count().saturating_sub(1);
+                    }
+                    
+                    // Ensure cursor column is valid for new line
+                    let line_len = editor.buffer.line_length(editor.cursor.row);
+                    if editor.cursor.col >= line_len && line_len > 0 {
+                        editor.cursor.col = line_len - 1;
+                    } else if line_len == 0 {
+                        editor.cursor.col = 0;
+                    }
+                }
+            } else {
+                // If only one line left, clear it but keep the line
+                if let Some(_line) = editor.buffer.get_line(0) {
+                    // Clear the line content but keep an empty line
+                    Self::clear_line_at(editor, 0);
+                    editor.cursor.col = 0;
+                }
+                break; // Don't delete more if we only have one line
+            }
+        }
+        
+        editor.modified = true;
+        editor.update_scroll();
+    }
+    
+    /// Execute delete with motion command (dw, d$, etc.)
+    pub fn execute_delete_motion(editor: &mut Editor, motion: MovementCommand) {
+        let start_pos = (editor.cursor.row, editor.cursor.col);
+        let count = editor.pending_count.unwrap_or(1);
+        
+        // Calculate end position by simulating the motion
+        let end_pos = Self::calculate_motion_end_position(editor, motion.clone(), count);
+        
+        // For backward motions, cursor should end up at the target position
+        let final_cursor_pos = match motion {
+            MovementCommand::WordBackward | 
+            MovementCommand::LineStart | 
+            MovementCommand::LineFirstChar |
+            MovementCommand::FileStart => {
+                // For backward motions, position cursor at the motion target
+                end_pos
+            }
+            MovementCommand::Left => {
+                // For left motion, position at the target
+                end_pos
+            }
+            _ => {
+                // For forward motions, position cursor at start of deleted range
+                start_pos
+            }
+        };
+        
+        // Delete the range between start and end
+        Self::delete_range(editor, start_pos, end_pos);
+        
+        // Position cursor appropriately
+        editor.cursor.row = final_cursor_pos.0;
+        editor.cursor.col = final_cursor_pos.1;
+        
+        // Ensure cursor is in valid position
+        Self::clamp_cursor_to_buffer(editor);
+        
+        editor.modified = true;
+        editor.update_scroll();
+    }
+    
+    /// Calculate where cursor would end up after a motion
+    fn calculate_motion_end_position(editor: &Editor, motion: MovementCommand, count: usize) -> (usize, usize) {
+        // Create a temporary cursor state to simulate the motion
+        let mut temp_row = editor.cursor.row;
+        let mut temp_col = editor.cursor.col;
+        
+        for _ in 0..count {
+            match motion {
+                MovementCommand::Left => {
+                    if temp_col > 0 {
+                        temp_col -= 1;
+                    }
+                }
+                MovementCommand::Right => {
+                    let line_len = editor.buffer.line_length(temp_row);
+                    if temp_col < line_len.saturating_sub(1) {
+                        temp_col += 1;
+                    }
+                }
+                MovementCommand::Up => {
+                    if temp_row > 0 {
+                        temp_row -= 1;
+                        let line_len = editor.buffer.line_length(temp_row);
+                        temp_col = temp_col.min(line_len.saturating_sub(1));
+                    }
+                }
+                MovementCommand::Down => {
+                    if temp_row + 1 < editor.buffer.line_count() {
+                        temp_row += 1;
+                        let line_len = editor.buffer.line_length(temp_row);
+                        temp_col = temp_col.min(line_len.saturating_sub(1));
+                    }
+                }
+                MovementCommand::WordForward => {
+                    // Simulate proper word forward motion
+                    if let Some(line) = editor.buffer.get_line(temp_row) {
+                        let chars: Vec<char> = line.chars().collect();
+                        
+                        // If we're at end of line, go to next line
+                        if temp_col >= chars.len() {
+                            if temp_row + 1 < editor.buffer.line_count() {
+                                temp_row += 1;
+                                temp_col = 0;
+                                if let Some(next_line) = editor.buffer.get_line(temp_row) {
+                                    let next_chars: Vec<char> = next_line.chars().collect();
+                                    // Skip leading whitespace
+                                    while temp_col < next_chars.len() && next_chars[temp_col].is_whitespace() {
+                                        temp_col += 1;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Move at least one character forward
+                            temp_col += 1;
+                            
+                            // Skip current word if we're on a word character
+                            while temp_col < chars.len() && Self::is_word_char(chars[temp_col]) {
+                                temp_col += 1;
+                            }
+                            
+                            // Skip non-word characters (separators)
+                            while temp_col < chars.len() && !Self::is_word_char(chars[temp_col]) && !chars[temp_col].is_whitespace() {
+                                temp_col += 1;
+                            }
+                            
+                            // Skip whitespace
+                            while temp_col < chars.len() && chars[temp_col].is_whitespace() {
+                                temp_col += 1;
+                            }
+                            
+                            // If we reached end of line, continue to next line
+                            if temp_col >= chars.len() && temp_row + 1 < editor.buffer.line_count() {
+                                temp_row += 1;
+                                temp_col = 0;
+                                if let Some(next_line) = editor.buffer.get_line(temp_row) {
+                                    let next_chars: Vec<char> = next_line.chars().collect();
+                                    // Skip leading whitespace on new line
+                                    while temp_col < next_chars.len() && next_chars[temp_col].is_whitespace() {
+                                        temp_col += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                MovementCommand::WordBackward => {
+                    // Simulate proper word backward motion
+                    if let Some(line) = editor.buffer.get_line(temp_row) {
+                        let chars: Vec<char> = line.chars().collect();
+                        
+                        // If at start of line, go to previous line
+                        if temp_col == 0 {
+                            if temp_row > 0 {
+                                temp_row -= 1;
+                                if let Some(prev_line) = editor.buffer.get_line(temp_row) {
+                                    let prev_chars: Vec<char> = prev_line.chars().collect();
+                                    if prev_chars.is_empty() {
+                                        temp_col = 0;
+                                    } else {
+                                        temp_col = prev_chars.len().saturating_sub(1);
+                                        // Find start of last word on previous line
+                                        while temp_col > 0 && !Self::is_word_char(prev_chars[temp_col]) {
+                                            temp_col -= 1;
+                                        }
+                                        while temp_col > 0 && Self::is_word_char(prev_chars[temp_col - 1]) {
+                                            temp_col -= 1;
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Move back one character first
+                            temp_col -= 1;
+                            
+                            // Skip whitespace and non-word chars
+                            while temp_col > 0 && (chars[temp_col].is_whitespace() || 
+                                  (!Self::is_word_char(chars[temp_col]) && !chars[temp_col].is_whitespace())) {
+                                temp_col -= 1;
+                            }
+                            
+                            // Handle case where we're at col 0
+                            if temp_col == 0 {
+                                if chars[temp_col].is_whitespace() || 
+                                   (!Self::is_word_char(chars[temp_col]) && !chars[temp_col].is_whitespace()) {
+                                    // Need to go to previous line
+                                    if temp_row > 0 {
+                                        temp_row -= 1;
+                                        if let Some(prev_line) = editor.buffer.get_line(temp_row) {
+                                            let prev_chars: Vec<char> = prev_line.chars().collect();
+                                            if prev_chars.is_empty() {
+                                                temp_col = 0;
+                                            } else {
+                                                temp_col = prev_chars.len().saturating_sub(1);
+                                                // Find start of last word
+                                                while temp_col > 0 && !Self::is_word_char(prev_chars[temp_col]) {
+                                                    temp_col -= 1;
+                                                }
+                                                while temp_col > 0 && Self::is_word_char(prev_chars[temp_col - 1]) {
+                                                    temp_col -= 1;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // If we're on a word char at col 0, stay there
+                            } else {
+                                // Skip to beginning of current word
+                                while temp_col > 0 && Self::is_word_char(chars[temp_col - 1]) {
+                                    temp_col -= 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                MovementCommand::WordEnd => {
+                    // Simulate word end motion
+                    if let Some(line) = editor.buffer.get_line(temp_row) {
+                        let chars: Vec<char> = line.chars().collect();
+                        if temp_col < chars.len() {
+                            // If on a word char, go to end of current word
+                            if Self::is_word_char(chars[temp_col]) {
+                                while temp_col < chars.len() && Self::is_word_char(chars[temp_col]) {
+                                    temp_col += 1;
+                                }
+                                temp_col = temp_col.saturating_sub(1);
+                            } else {
+                                // Skip to next word and then to its end
+                                while temp_col < chars.len() && !Self::is_word_char(chars[temp_col]) {
+                                    temp_col += 1;
+                                }
+                                while temp_col < chars.len() && Self::is_word_char(chars[temp_col]) {
+                                    temp_col += 1;
+                                }
+                                temp_col = temp_col.saturating_sub(1);
+                            }
+                        }
+                    }
+                }
+                MovementCommand::LineFirstChar => {
+                    // Move to first non-blank character
+                    if let Some(line) = editor.buffer.get_line(temp_row) {
+                        temp_col = line.chars()
+                            .position(|c| !c.is_whitespace())
+                            .unwrap_or(0);
+                    }
+                    break; // Don't repeat
+                }
+                MovementCommand::LineStart => {
+                    temp_col = 0;
+                    break; // Don't repeat
+                }
+                MovementCommand::LineEnd => {
+                    let line_len = editor.buffer.line_length(temp_row);
+                    temp_col = if line_len > 0 { line_len - 1 } else { 0 };
+                    break; // Don't repeat
+                }
+                MovementCommand::FileStart => {
+                    temp_row = 0;
+                    temp_col = 0;
+                    break; // Don't repeat
+                }
+                MovementCommand::FileEnd => {
+                    temp_row = editor.buffer.line_count().saturating_sub(1);
+                    let line_len = editor.buffer.line_length(temp_row);
+                    temp_col = if line_len > 0 { line_len - 1 } else { 0 };
+                    break; // Don't repeat
+                }
+                _ => break, // For other motions, stop here
+            }
+        }
+        
+        (temp_row, temp_col)
+    }
+    
+    /// Delete text in a range from start to end position
+    fn delete_range(editor: &mut Editor, start: (usize, usize), end: (usize, usize)) {
+        let (start_row, start_col) = start;
+        let (end_row, end_col) = end;
+        
+        // Ensure we delete in the correct direction (from smaller to larger position)
+        let (from_row, from_col, to_row, to_col) = if start_row < end_row || 
+            (start_row == end_row && start_col <= end_col) {
+            (start_row, start_col, end_row, end_col)
+        } else {
+            (end_row, end_col, start_row, start_col)
+        };
+        
+        if from_row == to_row {
+            // Single line deletion
+            if from_col < to_col {
+                // Delete from from_col to to_col (exclusive end)
+                for _ in from_col..to_col {
+                    if from_col < editor.buffer.line_length(from_row) {
+                        let pos = crate::buffer::Position::new(from_row, from_col);
+                        editor.buffer.delete_char(pos);
+                    }
+                }
+            } else if from_col > to_col {
+                // Backward deletion (like d0, d^)
+                for _ in to_col..from_col {
+                    if to_col < editor.buffer.line_length(from_row) {
+                        let pos = crate::buffer::Position::new(from_row, to_col);
+                        editor.buffer.delete_char(pos);
+                    }
+                }
+            }
+        } else {
+            // Multi-line deletion
+            if from_row < to_row {
+                // Forward multi-line deletion
+                
+                // First, delete from from_col to end of from_row
+                let start_line_len = editor.buffer.line_length(from_row);
+                for _ in from_col..start_line_len {
+                    if from_col < editor.buffer.line_length(from_row) {
+                        let pos = crate::buffer::Position::new(from_row, from_col);
+                        editor.buffer.delete_char(pos);
+                    }
+                }
+                
+                // Delete entire lines between from_row+1 and to_row-1
+                for row in (from_row + 1..to_row).rev() {
+                    Self::delete_line_at(editor, row);
+                }
+                
+                // Delete from start of to_row to to_col (now adjusted after line deletions)
+                let adjusted_end_row = from_row + 1;
+                if adjusted_end_row < editor.buffer.line_count() {
+                    for _ in 0..to_col {
+                        if 0 < editor.buffer.line_length(adjusted_end_row) {
+                            let pos = crate::buffer::Position::new(adjusted_end_row, 0);
+                            editor.buffer.delete_char(pos);
+                        }
+                    }
+                    
+                    // Join the remaining part of end line with start line
+                    if let Some(remaining_text) = editor.buffer.get_line(adjusted_end_row) {
+                        let remaining = remaining_text.clone();
+                        Self::delete_line_at(editor, adjusted_end_row);
+                        
+                        // Append remaining text to start line
+                        for ch in remaining.chars() {
+                            let pos = crate::buffer::Position::new(from_row, editor.buffer.line_length(from_row));
+                            editor.buffer.insert_char(pos, ch);
+                        }
+                    }
+                }
+            } else {
+                // Backward multi-line deletion (like dgg from middle of file)
+                
+                // Delete from start of from_row to from_col
+                for _ in 0..from_col {
+                    if 0 < editor.buffer.line_length(from_row) {
+                        let pos = crate::buffer::Position::new(from_row, 0);
+                        editor.buffer.delete_char(pos);
+                    }
+                }
+                
+                // Delete entire lines between to_row and from_row-1 (going backward)
+                for row in (to_row..from_row).rev() {
+                    Self::delete_line_at(editor, row);
+                }
+                
+                // The cursor should be positioned at the beginning of what remains
+            }
+        }
+    }
+    
+    /// Helper to delete a line at specific row
+    fn delete_line_at(editor: &mut Editor, row: usize) {
+        // For now, we'll implement this by clearing the line and removing it
+        // We need to add a proper delete_line method to Buffer trait later
+        
+        // Clear the line first
+        let line_len = editor.buffer.line_length(row);
+        for _ in 0..line_len {
+            let pos = crate::buffer::Position::new(row, 0);
+            editor.buffer.delete_char(pos);
+        }
+        
+        // Remove the empty line by deleting the newline char if not last line
+        if row < editor.buffer.line_count() - 1 {
+            let pos = crate::buffer::Position::new(row, 0);
+            // Delete the newline character to merge with next line
+            if editor.buffer.line_length(row) == 0 {
+                editor.buffer.delete_char(pos);
+            }
+        }
+    }
+    
+    /// Helper to clear a line at specific row
+    fn clear_line_at(editor: &mut Editor, row: usize) {
+        let line_len = editor.buffer.line_length(row);
+        for _ in 0..line_len {
+            let pos = crate::buffer::Position::new(row, 0);
+            editor.buffer.delete_char(pos);
+        }
+    }
+    
+    /// Ensure cursor is within valid buffer bounds
+    fn clamp_cursor_to_buffer(editor: &mut Editor) {
+        // Clamp row to buffer bounds
+        editor.cursor.row = editor.cursor.row.min(editor.buffer.line_count().saturating_sub(1));
+        
+        // Clamp column to line length
+        let line_len = editor.buffer.line_length(editor.cursor.row);
+        if line_len > 0 {
+            editor.cursor.col = editor.cursor.col.min(line_len - 1);
+        } else {
+            editor.cursor.col = 0;
+        }
     }
 }
 

@@ -19,3 +19,10 @@ Words_with_underscores are single words.
 But word!mark and word?mark are separate.
 Special chars: @#$%^&*(){}[]
 Mixed: word123_test!punctuation?here.
+
+This is line 1 with some words.
+This is line 2 with more text here.
+Short line.
+This is a longer line with many words to test deletion.
+Another line here.
+Final line for testing.
