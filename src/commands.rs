@@ -230,11 +230,11 @@ impl Command for EditCommand {
                 Ok(())
             }
             EditCommand::Undo => {
-                // TODO: Implement undo functionality
+                editor.undo();
                 Ok(())
             }
             EditCommand::Redo => {
-                // TODO: Implement redo functionality
+                editor.redo();
                 Ok(())
             }
         }
@@ -266,6 +266,7 @@ impl Command for ModeSwitchCommand {
     fn execute(&self, editor: &mut Editor) -> Result<(), String> {
         match self {
             ModeSwitchCommand::InsertBefore => {
+                editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertAfter => {
@@ -273,15 +274,18 @@ impl Command for ModeSwitchCommand {
                 if editor.cursor.col < line_len {
                     editor.cursor.col += 1;
                 }
+                editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertLineEnd => {
                 let line_len = editor.buffer.line_length(editor.cursor.row);
                 editor.cursor.col = line_len;
+                editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertLineStart => {
                 editor.cursor.col = 0;
+                editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::OpenLineBelow => {
@@ -291,6 +295,8 @@ impl Command for ModeSwitchCommand {
                 editor.cursor.col = 0;
                 editor.modified = true;
                 editor.update_scroll();
+                // Start insert mode with the newline already included
+                editor.start_insert_mode_with_initial_text(pos, "\n".to_string());
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::OpenLineAbove => {
@@ -299,6 +305,8 @@ impl Command for ModeSwitchCommand {
                 editor.cursor.col = 0;
                 editor.modified = true;
                 editor.update_scroll();
+                // Start insert mode with the newline already included
+                editor.start_insert_mode_with_initial_text(pos, "\n".to_string());
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::CommandMode => {
@@ -533,6 +541,10 @@ impl TextOperations {
     pub fn delete_char_at_cursor(editor: &mut Editor) {
         let cursor_pos = editor.cursor_position();
         if let Some(deleted_char) = editor.buffer.delete_char(cursor_pos) {
+            // Record the deletion for undo
+            let action = crate::history::EditAction::delete_text(cursor_pos, deleted_char.to_string());
+            editor.history.push(action);
+            
             // Store the deleted character in the register
             editor.register.store_text(deleted_char.to_string());
             
@@ -771,7 +783,12 @@ impl OperatorExecutor {
         // Store in register
         if !deleted_lines.is_empty() {
             let deleted_text = deleted_lines.join("\n") + "\n";
-            editor.register.store_lines(deleted_text);
+            editor.register.store_lines(deleted_text.clone());
+            
+            // Record the line deletion for undo
+            let delete_pos = crate::buffer::Position::new(start_row, 0);
+            let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
+            editor.history.push(action);
         }
         
         // Now delete the lines
@@ -815,10 +832,23 @@ impl OperatorExecutor {
         // Store in register
         if !deleted_text.is_empty() {
             if motion.is_line_motion() {
-                editor.register.store_lines(deleted_text);
+                editor.register.store_lines(deleted_text.clone());
             } else {
-                editor.register.store_text(deleted_text);
+                editor.register.store_text(deleted_text.clone());
             }
+            
+            // Record the deletion for undo - use the correct position for reinsertion
+            let (delete_row, delete_col) = if start_pos.0 < end_pos.0 || 
+                (start_pos.0 == end_pos.0 && start_pos.1 <= end_pos.1) {
+                // Forward motion (like dw, d$) - reinsert at start position
+                start_pos
+            } else {
+                // Backward motion (like dgg) - reinsert at end position  
+                end_pos
+            };
+            let delete_pos = crate::buffer::Position::new(delete_row, delete_col);
+            let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
+            editor.history.push(action);
         }
         
         let final_cursor_pos = match motion {
@@ -914,9 +944,20 @@ impl OperatorExecutor {
             return;
         }
         
+        let paste_pos = if editor.register.is_line_based {
+            crate::buffer::Position::new(editor.cursor.row + 1, 0)
+        } else {
+            crate::buffer::Position::new(editor.cursor.row, editor.cursor.col + 1)
+        };
+        
         if editor.register.is_line_based {
             // Insert lines after current line
             let lines: Vec<&str> = editor.register.content.trim_end_matches('\n').split('\n').collect();
+            
+            // Record the line-based paste for undo
+            let action = crate::history::EditAction::insert_text(paste_pos, editor.register.content.clone());
+            editor.history.push(action);
+            
             for (i, line) in lines.iter().enumerate() {
                 let insert_row = editor.cursor.row + 1 + i;
                 editor.buffer.insert_line(insert_row, line.to_string());
@@ -949,6 +990,11 @@ impl OperatorExecutor {
                 insert_col = line_len;
             }
             
+            // Record the text paste for undo
+            let final_pos = crate::buffer::Position::new(editor.cursor.row, insert_col);
+            let action = crate::history::EditAction::insert_text(final_pos, editor.register.content.clone());
+            editor.history.push(action);
+            
             for (i, ch) in chars.iter().enumerate() {
                 let pos = crate::buffer::Position::new(editor.cursor.row, insert_col + i);
                 editor.buffer.insert_char(pos, *ch);
@@ -970,9 +1016,20 @@ impl OperatorExecutor {
             return;
         }
         
+        let paste_pos = if editor.register.is_line_based {
+            crate::buffer::Position::new(editor.cursor.row, 0)
+        } else {
+            crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
+        };
+        
         if editor.register.is_line_based {
             // Insert lines before current line
             let lines: Vec<&str> = editor.register.content.trim_end_matches('\n').split('\n').collect();
+            
+            // Record the line-based paste for undo
+            let action = crate::history::EditAction::insert_text(paste_pos, editor.register.content.clone());
+            editor.history.push(action);
+            
             for (i, line) in lines.iter().enumerate() {
                 let insert_row = editor.cursor.row + i;
                 editor.buffer.insert_line(insert_row, line.to_string());
@@ -994,6 +1051,10 @@ impl OperatorExecutor {
         } else {
             // Insert text at cursor position
             let chars: Vec<char> = editor.register.content.chars().collect();
+            
+            // Record the text paste for undo
+            let action = crate::history::EditAction::insert_text(paste_pos, editor.register.content.clone());
+            editor.history.push(action);
             
             for (i, ch) in chars.iter().enumerate() {
                 let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col + i);
@@ -1185,6 +1246,7 @@ impl InsertModeProcessor {
                     crate::buffer::Position::new(editor.cursor.row, editor.cursor.col), 
                     *c
                 );
+                editor.insert_mode_char(*c);
                 editor.cursor.col += 1;
                 editor.modified = true;
             }
@@ -1194,6 +1256,7 @@ impl InsertModeProcessor {
                 editor.buffer.insert_newline(
                     crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
                 );
+                editor.insert_mode_newline();
                 editor.cursor.row += 1;
                 editor.cursor.col = 0;
                 editor.modified = true;
@@ -1205,9 +1268,9 @@ impl InsertModeProcessor {
                 if editor.cursor.col > 0 {
                     // Delete character to the left in current line
                     editor.cursor.col -= 1;
-                    editor.buffer.delete_char(
-                        crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
-                    );
+                    let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col);
+                    let deleted_char = editor.buffer.delete_char(pos);
+                    editor.insert_mode_backspace(deleted_char, Some(pos));
                     editor.modified = true;
                 } else if editor.cursor.row > 0 {
                     // At beginning of line - join with previous line
@@ -1215,10 +1278,10 @@ impl InsertModeProcessor {
                     editor.cursor.col = editor.buffer.line_length(editor.cursor.row);
                     
                     // Delete the newline (which will merge the lines)
-                    editor.buffer.delete_char(
-                        crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
-                    );
+                    let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col);
+                    let deleted_char = editor.buffer.delete_char(pos);
                     
+                    editor.insert_mode_backspace(deleted_char, Some(pos));
                     editor.modified = true;
                     editor.update_scroll();
                 }

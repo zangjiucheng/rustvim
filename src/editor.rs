@@ -1,6 +1,7 @@
 use crate::buffer::Buffer;
 use crate::terminal::Terminal;
 use crate::commands::{CommandProcessor, InsertModeProcessor};
+use crate::history::History;
 
 /// Represents the current mode of the editor
 #[derive(Debug, Clone, PartialEq)]
@@ -70,6 +71,12 @@ pub struct Editor {
     
     /// Register to hold yanked/deleted text
     pub register: Register,
+    
+    /// History manager for undo/redo functionality
+    pub history: History,
+    
+    /// Tracks changes during insert mode for grouping
+    pub insert_mode_changes: Option<InsertModeGroup>,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -124,6 +131,8 @@ impl Editor {
             pending_count: None,
             pending_operator: None,
             register: Register::new(),
+            history: History::new(),
+            insert_mode_changes: None,
         }
     }
     
@@ -154,6 +163,7 @@ impl Editor {
                     match self.mode {
                         Mode::Insert => {
                             // Exit insert mode, move cursor left if possible
+                            self.end_insert_mode();
                             self.mode = Mode::Normal;
                             if self.cursor.col > 0 {
                                 self.cursor.col -= 1;
@@ -366,6 +376,8 @@ impl Editor {
         self.modified = false;
         // Reset cursor to top of file
         self.cursor = Cursor::new();
+        // Clear history when loading a new file
+        self.history.clear();
         Ok(())
     }
     
@@ -386,5 +398,159 @@ impl Editor {
         self.filename = Some(filename.to_string());
         self.modified = false;
         Ok(())
+    }
+    
+    /// Perform undo operation
+    pub fn undo(&mut self) {
+        if let Some((_action, cursor_pos)) = self.history.apply_undo(&mut self.buffer) {
+            self.cursor.row = cursor_pos.row;
+            self.cursor.col = cursor_pos.col;
+            self.modified = true;
+            
+            // Enhanced status message with undo count
+            let remaining = self.history.undo_count();
+            if remaining > 0 {
+                self.status_msg = Some(format!("Undone ({} more available)", remaining));
+            } else {
+                self.status_msg = Some("Undone (oldest change)".to_string());
+            }
+        } else {
+            self.status_msg = Some("Already at oldest change".to_string());
+        }
+        self.update_scroll();
+    }
+    
+    /// Perform redo operation
+    pub fn redo(&mut self) {
+        if let Some((_action, cursor_pos)) = self.history.apply_redo(&mut self.buffer) {
+            self.cursor.row = cursor_pos.row;
+            self.cursor.col = cursor_pos.col;
+            self.modified = true;
+            
+            // Enhanced status message with redo count
+            let remaining = self.history.redo_count();
+            if remaining > 0 {
+                self.status_msg = Some(format!("Redone ({} more available)", remaining));
+            } else {
+                self.status_msg = Some("Redone (newest change)".to_string());
+            }
+        } else {
+            self.status_msg = Some("Already at newest change".to_string());
+        }
+        self.update_scroll();
+    }
+    
+    /// Start tracking insert mode changes
+    pub fn start_insert_mode(&mut self) {
+        let start_pos = crate::buffer::Position::new(self.cursor.row, self.cursor.col);
+        self.insert_mode_changes = Some(InsertModeGroup::new(start_pos));
+    }
+    
+    /// End tracking insert mode changes and record them as a single undo action
+    pub fn end_insert_mode(&mut self) {
+        if let Some(changes) = self.insert_mode_changes.take() {
+            // Record insertions if any
+            if !changes.inserted_text.is_empty() {
+                let action = crate::history::EditAction::insert_text(
+                    changes.start_pos,
+                    changes.inserted_text
+                );
+                self.history.push(action);
+            }
+            
+            // Record deletions if any (these happened during insert mode via backspace)
+            if !changes.deleted_text.is_empty() {
+                if let Some(deletion_pos) = changes.deletion_start_pos {
+                    let action = crate::history::EditAction::delete_text(
+                        deletion_pos,
+                        changes.deleted_text
+                    );
+                    self.history.push(action);
+                }
+            }
+        }
+    }
+    
+    /// Record a character insertion during insert mode
+    pub fn insert_mode_char(&mut self, ch: char) {
+        if let Some(ref mut changes) = self.insert_mode_changes {
+            changes.add_char(ch);
+        }
+    }
+    
+    /// Record a newline insertion during insert mode
+    pub fn insert_mode_newline(&mut self) {
+        if let Some(ref mut changes) = self.insert_mode_changes {
+            changes.add_newline();
+        }
+    }
+    
+    /// Record a character deletion during insert mode (backspace)
+    pub fn insert_mode_backspace(&mut self, deleted_char: Option<char>, deletion_pos: Option<crate::buffer::Position>) {
+        if let Some(ref mut changes) = self.insert_mode_changes {
+            // Try to remove a character from recently inserted text first
+            if !changes.inserted_text.is_empty() {
+                changes.remove_char();
+            } else if let (Some(ch), Some(pos)) = (deleted_char, deletion_pos) {
+                // If we're not removing recent insertions, this is deleting existing buffer content
+                changes.add_deleted_char(ch, pos);
+            }
+        }
+    }
+    
+    /// Start tracking insert mode changes with initial text already inserted
+    pub fn start_insert_mode_with_initial_text(&mut self, start_pos: crate::buffer::Position, initial_text: String) {
+        let mut changes = InsertModeGroup::new(start_pos);
+        changes.inserted_text = initial_text;
+        self.insert_mode_changes = Some(changes);
+    }
+}
+
+/// Tracks changes made during a single insert mode session
+#[derive(Debug, Clone)]
+pub struct InsertModeGroup {
+    /// The starting position where insert mode began
+    pub start_pos: crate::buffer::Position,
+    /// The accumulated text that was inserted
+    pub inserted_text: String,
+    /// The text that was deleted during this insert session (for backspace on existing content)
+    pub deleted_text: String,
+    /// The position where deletions started (for backspace on existing content)
+    pub deletion_start_pos: Option<crate::buffer::Position>,
+}
+
+impl InsertModeGroup {
+    pub fn new(start_pos: crate::buffer::Position) -> Self {
+        Self {
+            start_pos,
+            inserted_text: String::new(),
+            deleted_text: String::new(),
+            deletion_start_pos: None,
+        }
+    }
+    
+    pub fn add_char(&mut self, ch: char) {
+        self.inserted_text.push(ch);
+    }
+    
+    pub fn add_newline(&mut self) {
+        self.inserted_text.push('\n');
+    }
+    
+    pub fn remove_char(&mut self) {
+        self.inserted_text.pop();
+    }
+    
+    /// Record a character that was deleted from existing buffer content (not just undoing recent insertions)
+    pub fn add_deleted_char(&mut self, ch: char, pos: crate::buffer::Position) {
+        if self.deletion_start_pos.is_none() {
+            self.deletion_start_pos = Some(pos);
+        }
+        self.deleted_text.insert(0, ch); // Insert at beginning to maintain order
+    }
+    
+    /// Check if this insert session has any changes (insertions or deletions)
+    pub fn has_changes(&self) -> bool {
+        !self.inserted_text.is_empty() || !self.deleted_text.is_empty()
     }
 }

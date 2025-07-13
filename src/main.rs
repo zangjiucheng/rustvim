@@ -3,6 +3,7 @@ mod buffer;
 mod terminal;
 mod input;
 mod commands;
+mod history;
 
 use editor::Editor;
 
