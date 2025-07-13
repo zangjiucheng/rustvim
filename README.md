@@ -18,11 +18,13 @@ The editor is structured into logical modules:
 
 ### Core Modules
 
-- **`editor.rs`** - Main editor state and event loop controller
-- **`buffer.rs`** - Text storage and manipulation with efficient editing operations
+- **`editor.rs`** - Main editor state, modal editing controller, undo/redo integration
+- **`buffer.rs`** - Unicode-safe text storage with efficient editing operations  
 - **`terminal.rs`** - Raw terminal I/O and screen control using ANSI escape codes
-- **`input.rs`** - Keystroke reading and parsing, including special key sequences
-- **`commands.rs`** - Command definitions and execution for different modes
+- **`input.rs`** - Comprehensive keystroke reading and escape sequence parsing
+- **`commands.rs`** - Complete command system for Normal/Insert modes
+- **`history.rs`** - Vim-like undo/redo system with change grouping
+- **`lib.rs`** - Library interface for modular architecture and testing
 
 ### Design Principles
 
@@ -31,28 +33,38 @@ The editor is structured into logical modules:
 3. **Safety**: Rust's ownership system ensures memory safety
 4. **Extensibility**: Trait-based design allows for future improvements
 
-## Current Status (Day 2)
+## Current Status (Day 12 Complete)
 
-✅ **Completed:**
-- Project initialization with Cargo
-- Git repository setup  
-- Core module structure definition
-- Basic data structures and enums
-- Architectural planning and documentation
-- **Terminal raw mode implementation**
-- **RAII guard for safe terminal restoration**
-- **ANSI escape sequence control**
-- **Interactive raw mode testing**
+✅ **Completed Features:**
+- **Project Foundation**: Cargo setup, Git repository, modular architecture
+- **Terminal Control**: Raw mode implementation with RAII guard pattern
+- **Input Handling**: Comprehensive keystroke reading, escape sequence parsing
+- **Text Buffer**: Unicode-safe editing with efficient line operations
+- **Screen Rendering**: Full file display with viewport scrolling and status line
+- **Modal Editing**: Complete Normal/Insert mode switching (i, a, A, o, O, ESC)
+- **Cursor Navigation**: Vim-style movement (hjkl, arrows, 0, $, gg, G)
+- **Text Editing**: Character insertion, deletion (x), line operations (Enter, Backspace)
+- **File Operations**: Load and display files from command line
+- **Delete Operations**: Single character (x) and line deletion (dd) with motions
+- **Word Motion**: Word navigation (w, b, e) and text object movements
+- **Yank/Paste System**: Copy (yy, yw) and paste (p, P) with register management
+- **Undo/Redo System**: Complete vim-like undo (u) and redo (Ctrl-R) functionality
+- **Insert Mode Grouping**: Intelligent change grouping for undo operations
+- **Integration Testing**: Comprehensive test suite for all modules
 
-🚧 **In Progress:**
-- Keystroke reading and parsing (Day 3 ready)
-- Input event loop foundation
-- Basic screen rendering framework
+🎯 **Current Capabilities:**
+- Load files: `cargo run filename.txt`
+- Modal editing with all basic Vim commands
+- Text insertion, deletion, and navigation
+- Copy/paste operations with proper register handling
+- Full undo/redo support with vim-like behavior
+- Professional status line and interface
 
-📅 **Next Steps (Day 3):**
-- Single-byte input reading and classification
-- Escape sequence parsing for special keys
-- Key enum mapping and event generation
+📅 **Next Steps (Days 13-30):**
+- Search functionality (find in buffer)
+- Command-line mode (Ex commands for file I/O)
+- Visual mode and advanced text selection
+- Multiple buffers and buffer switching
 
 ## Documentation
 
@@ -72,11 +84,38 @@ cd vimlike_editor
 # Build the project
 cargo build
 
-# Run the editor
+# Run the editor (empty buffer)
 cargo run
 
-# Run tests
+# Load and edit a specific file
+cargo run filename.txt
+
+# Run comprehensive test suite
 cargo test
+
+# Run integration tests
+cargo test --test integration_tests
+```
+
+## Usage
+
+### Basic Operation
+- **File Loading**: `cargo run README.md` to open any text file
+- **Modal Editing**: Switch between Normal mode (navigation) and Insert mode (editing)
+- **Navigation**: Use `hjkl` or arrow keys, `0`/`$` for line start/end, `gg`/`G` for file start/end
+- **Editing**: Press `i` to enter Insert mode, type text, press `ESC` to return to Normal mode
+- **Advanced**: Word navigation (`w`, `b`, `e`), deletion (`x`, `dd`), copy/paste (`yy`, `p`)
+- **Undo/Redo**: Use `u` to undo changes, `Ctrl-R` to redo
+- **Exit**: Press `Ctrl+Q` to quit the editor
+
+### Vim Commands Supported
+```
+Navigation:     h j k l (arrows), 0 $ gg G, w b e
+Insert modes:   i a A o O
+Edit:           x (delete char), dd (delete line) 
+Copy/Paste:     yy yw (yank), p P (paste)
+Undo/Redo:      u (undo), Ctrl-R (redo)
+Exit:           Ctrl+Q
 ```
 
 ## Module Documentation
@@ -122,34 +161,73 @@ Processes raw keyboard input:
 
 ### Commands Module (`commands.rs`)
 
-Defines the command system:
-- Normal mode command parsing
-- Movement, edit, and mode-switch operations
-- Operator-pending state management
-- Command execution framework
+Implements the complete command system:
+- **Normal mode commands**: Navigation (hjkl, 0$, ggG), deletion (x, dd), yank (yy, yw)
+- **Insert mode commands**: Text insertion, line operations, cursor movement
+- **Operator-pending mode**: Delete/yank with motion commands (dw, d$, y0)
+- **Mode switching**: Seamless transitions between Normal and Insert modes
+- **Command execution**: Integrated with editor state and undo system
+
+### History Module (`history.rs`)
+
+Provides vim-like undo/redo functionality:
+- **Action tracking**: Records all text modifications with position information
+- **Change grouping**: Groups insert mode sessions as single undo actions
+- **Efficient storage**: Memory-bounded history with configurable limits
+- **Cursor restoration**: Maintains cursor position across undo/redo operations
+- **Integration**: Seamlessly works with all editing operations
 
 ## Learning Objectives
 
-This project serves as a comprehensive example of:
+This project demonstrates practical implementation of:
 
-1. **Systems Programming**: Low-level terminal control and I/O
-2. **Rust Language Features**: Ownership, borrowing, pattern matching, traits
-3. **Software Architecture**: Modular design and separation of concerns
-4. **Text Editor Internals**: Buffer management, modal editing, command parsing
-5. **UNIX Programming**: Terminal APIs and escape sequences
+1. **Systems Programming**: Raw terminal control, POSIX APIs, and low-level I/O
+2. **Rust Language Features**: Ownership, borrowing, pattern matching, traits, and RAII
+3. **Software Architecture**: Modular design, separation of concerns, and clean interfaces
+4. **Text Editor Internals**: Buffer management, modal editing, command parsing, and undo systems
+5. **UNIX Programming**: Terminal control, escape sequences, and signal handling
+6. **Testing Strategies**: Unit testing, integration testing, and interactive validation
+
+## Project Highlights
+
+### Technical Achievements
+- **Zero-dependency core**: Raw terminal control without external crates
+- **Memory safe**: 100% safe Rust with comprehensive bounds checking
+- **Vim-compatible**: Behavior closely matches Vim for supported commands
+- **Robust architecture**: Clean module separation with extensive testing
+- **Educational value**: Well-documented code perfect for learning systems programming
+
+### Real-world Applicability
+- **Production patterns**: RAII guards, error handling, and resource management
+- **Performance considerations**: Efficient data structures and minimal allocations
+- **User experience**: Responsive interface with immediate visual feedback
+- **Maintainability**: Modular design supports easy feature additions
 
 ## Testing Strategy
 
-The project includes unit tests for core functionality:
+The project includes comprehensive testing for all functionality:
 
 ```bash
-# Run all tests
+# Run all tests (unit + integration)
 cargo test
 
 # Run specific module tests
 cargo test buffer
 cargo test editor
+cargo test history
+
+# Run integration tests only
+cargo test --test integration_tests
+
+# Test interactive functionality
+cargo run README.md  # Load this file and try editing
 ```
+
+### Test Coverage
+- **Unit Tests**: Core functionality in buffer, terminal, input, and history modules
+- **Integration Tests**: Real module interactions and workflow testing
+- **Manual Testing**: Interactive editing scenarios and edge cases
+- **Regression Testing**: Ensures new features don't break existing functionality
 
 ## Contributing
 
