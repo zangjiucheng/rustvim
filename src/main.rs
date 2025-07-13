@@ -1,11 +1,4 @@
-mod editor;
-mod buffer;
-mod terminal;
-mod input;
-mod commands;
-mod history;
-
-use editor::Editor;
+use vimlike_editor::editor::Editor;
 
 fn main() {
     println!("VimLike Editor v0.1.0");
