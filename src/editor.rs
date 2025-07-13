@@ -87,6 +87,9 @@ pub struct Editor {
     
     /// Position of current search match (for highlighting)
     pub search_match: Option<(usize, usize, usize)>, // (row, col, length)
+    
+    /// Current command input buffer (while typing command)
+    pub command_input: String,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -146,6 +149,7 @@ impl Editor {
             search_query: None,
             search_input: String::new(),
             search_match: None,
+            command_input: String::new(),
         }
     }
     
@@ -165,18 +169,13 @@ impl Editor {
             // Read key input
             let key = input_handler.read_key()?;
             
-            // Clear status message on any key press (except in search mode)
-            if self.mode != Mode::Search {
+            // Clear status message on any key press (except in search/command mode)
+            if self.mode != Mode::Search && self.mode != Mode::Command {
                 self.clear_status_message();
             }
             
             // Handle global commands first
             match &key {
-                // Quit commands
-                crate::input::Key::Ctrl('q') => {
-                    self.running = false;
-                    continue;
-                }
                 crate::input::Key::Esc => {
                     match self.mode {
                         Mode::Insert => {
@@ -187,9 +186,27 @@ impl Editor {
                                 self.cursor.col -= 1;
                             }
                         }
-                        _ => {
-                            // For now, ESC in normal mode quits (temporary)
-                            self.running = false;
+                        Mode::Search => {
+                            // Cancel search and return to normal mode
+                            self.mode = Mode::Normal;
+                            self.search_input.clear();
+                            self.search_match = None;
+                        }
+                        Mode::Command => {
+                            // Cancel command and return to normal mode
+                            self.mode = Mode::Normal;
+                            self.command_input.clear();
+                        }
+                        Mode::Visual => {
+                            // TODO: Exit visual mode when implemented
+                            self.mode = Mode::Normal;
+                        }
+                        Mode::Normal => {
+                            // In normal mode, ESC does nothing (Vim behavior)
+                            // Could clear status messages or pending operations
+                            self.clear_status_message();
+                            self.pending_count = None;
+                            self.pending_operator = None;
                         }
                     }
                     self.refresh_screen()?;
@@ -207,7 +224,7 @@ impl Editor {
                     InsertModeProcessor::handle_input(self, &key);
                 }
                 Mode::Command => {
-                    // TODO: Implement command mode handling
+                    self.handle_command_mode_input(&key);
                 }
                 Mode::Visual => {
                     // TODO: Implement visual mode handling
@@ -324,6 +341,14 @@ impl Editor {
             return Ok(());
         }
         
+        // Handle command mode specially
+        if self.mode == Mode::Command {
+            let command_prompt = format!(":{}", self.command_input);
+            let padded_prompt = format!("{}{}", command_prompt, " ".repeat(cols.saturating_sub(command_prompt.len())));
+            self.terminal.write_highlighted(&padded_prompt)?;
+            return Ok(());
+        }
+        
         // Handle status messages
         if let Some(ref msg) = self.status_msg {
             let padded_msg = format!("{}{}", msg, " ".repeat(cols.saturating_sub(msg.len())));
@@ -432,37 +457,6 @@ impl Editor {
         crate::buffer::Position::new(self.cursor.row, self.cursor.col)
     }
     
-    /// Load file into buffer
-    pub fn load_file(&mut self, filename: &str) -> std::io::Result<()> {
-        let content = std::fs::read_to_string(filename)?;
-        self.buffer = Buffer::from_file(&content);
-        self.filename = Some(filename.to_string());
-        self.modified = false;
-        // Reset cursor to top of file
-        self.cursor = Cursor::new();
-        // Clear history when loading a new file
-        self.history.clear();
-        Ok(())
-    }
-    
-    /// Save buffer to file
-    pub fn save_file(&mut self) -> std::io::Result<()> {
-        if let Some(filename) = &self.filename {
-            std::fs::write(filename, self.buffer.to_string())?;
-            self.modified = false;
-            Ok(())
-        } else {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "No filename set"))
-        }
-    }
-    
-    /// Save buffer to specific file
-    pub fn save_file_as(&mut self, filename: &str) -> std::io::Result<()> {
-        std::fs::write(filename, self.buffer.to_string())?;
-        self.filename = Some(filename.to_string());
-        self.modified = false;
-        Ok(())
-    }
     
     /// Perform undo operation
     pub fn undo(&mut self) {
@@ -588,12 +582,6 @@ impl Editor {
                 self.mode = Mode::Normal;
                 self.search_input.clear();
             }
-            crate::input::Key::Esc => {
-                // Cancel search
-                self.mode = Mode::Normal;
-                self.search_input.clear();
-                self.search_match = None;
-            }
             crate::input::Key::Backspace => {
                 // Remove last character from search query
                 self.search_input.pop();
@@ -603,7 +591,7 @@ impl Editor {
                 self.search_input.push(*c);
             }
             _ => {
-                // Ignore other keys in search mode
+                // Ignore other keys in search mode (ESC handled globally)
             }
         }
     }
@@ -824,11 +812,91 @@ impl Editor {
         self.status_msg = Some(message);
     }
     
-    /// Clear status message
+    /// Clear the status message
     pub fn clear_status_message(&mut self) {
         self.status_msg = None;
     }
-
+    
+    /// Start command mode with : command
+    pub fn start_command_mode(&mut self) {
+        self.mode = Mode::Command;
+        self.command_input.clear();
+    }
+    
+    /// Handle input in command mode
+    pub fn handle_command_mode_input(&mut self, key: &crate::input::Key) {
+        match key {
+            crate::input::Key::Enter => {
+                // Execute command
+                let command = self.command_input.trim().to_string();
+                self.execute_ex_command(&command);
+                self.mode = Mode::Normal;
+                self.command_input.clear();
+            }
+            crate::input::Key::Backspace => {
+                // Remove last character from command
+                self.command_input.pop();
+            }
+            crate::input::Key::Char(c) => {
+                // Add character to command
+                self.command_input.push(*c);
+            }
+            _ => {
+                // Ignore other keys in command mode (ESC handled globally)
+            }
+        }
+    }
+    
+    /// Execute Ex command (like :w, :q, :wq, etc.)
+    pub fn execute_ex_command(&mut self, command: &str) {
+        if command.is_empty() {
+            return;
+        }
+        
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        if parts.is_empty() {
+            return;
+        }
+        
+        match parts[0] {
+            "w" => {
+                if parts.len() > 1 {
+                    // :w filename - save as
+                    let filename = parts[1..].join(" ");
+                    self.write_file(Some(filename));
+                } else {
+                    // :w - save current file
+                    self.write_file(None);
+                }
+            }
+            "q" => {
+                // :q - quit
+                self.quit_editor(false);
+            }
+            "q!" => {
+                // :q! - force quit (discard changes)
+                self.quit_editor(true);
+            }
+            "wq" | "x" => {
+                // :wq or :x - write and quit
+                if self.write_file(None) {
+                    self.quit_editor(true); // Force quit after successful write
+                }
+            }
+            "e" => {
+                if parts.len() > 1 {
+                    // :e filename - edit new file
+                    let filename = parts[1..].join(" ");
+                    self.edit_file(&filename);
+                } else {
+                    self.set_status_message("E471: Argument required".to_string());
+                }
+            }
+            _ => {
+                self.set_status_message(format!("E492: Not an editor command: {}", command));
+            }
+        }
+    }
 }
 
 /// Tracks changes made during a single insert mode session

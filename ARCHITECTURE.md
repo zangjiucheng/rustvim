@@ -1,64 +1,199 @@
-# VimLike Editor - Cleaned Architecture
+# VimLike Editor - Architecture Overview
 
-## Current Status (Day 5 Complete)
+## Current Status: Full-Featured Vim-like Text Editor
 
-The main.rs has been cleaned up to focus on the essential editor functionality:
+This is a comprehensive vim-like text editor implemented in Rust, featuring multiple editing modes, file I/O operations, search functionality, command-line interface, and robust undo/redo system.
 
-### Main Function (`main.rs`)
-- **Simple and focused**: Loads files from command line arguments
-- **Error handling**: Graceful file loading with fallback for missing files  
-- **Clean entry point**: Directly launches the editor with minimal setup
+## Core Features
 
-### Test Functions (moved to `tests/daily_tests.rs`)
-- **Archived development tests**: All the daily testing functions from Days 1-5
-- **Documentation**: Comments explaining what each test phase validated
-- **Reference**: Available for debugging or development reference
+### Editing Modes
+✅ **Normal Mode**: Navigation and command execution
+✅ **Insert Mode**: Text insertion with full editing capabilities
+✅ **Command Mode**: Ex-command execution (`:w`, `:q`, `:wq`, `:e`, etc.)
+✅ **Search Mode**: Forward and backward text search with highlighting
+✅ **Visual Mode**: Text selection (framework ready for implementation)
 
-## Current Functionality
+### File Operations
+✅ **File Loading**: Load any text file with proper newline preservation
+✅ **File Saving**: Save with `:w`, save as with `:w filename`
+✅ **New File Creation**: Create new files with `:e filename`
+✅ **Multiple File Support**: Switch between files with proper change detection
+✅ **Newline Preservation**: Maintains original file formatting
 
-### What Works Now:
-✅ **File Loading**: `cargo run filename.txt`
-✅ **Terminal Control**: Full ANSI escape sequence support
-✅ **Screen Rendering**: Complete buffer display with status line
-✅ **Viewport Management**: Automatic scrolling for large files
-✅ **Professional Interface**: Vim-style status bar and empty line markers
+### Navigation & Editing
+✅ **Cursor Movement**: h/j/k/l, arrow keys, word navigation (w/b)
+✅ **Line Operations**: Insert lines (o/O), delete lines (dd), go to line (G)
+✅ **Character Operations**: Insert/delete characters, backspace support
+✅ **Search & Replace**: Forward (/) and backward (?) search with n/N repeat
+✅ **Scroll Management**: Automatic viewport scrolling for large files
 
-### Usage:
+### Advanced Features
+✅ **Undo/Redo System**: Full history tracking with u/Ctrl+R
+✅ **Yank/Put Operations**: Copy (y) and paste (p) with register support
+✅ **Count Prefixes**: Numeric prefixes for commands (5j, 3dd, etc.)
+✅ **Operator-Motion Commands**: Combine operators with motions (d5j, y3w)
+✅ **Status Messages**: Vim-style error and informational messages
+
+### User Interface
+✅ **Status Line**: File info, mode display, cursor position, line count
+✅ **Command Prompt**: Real-time command input with proper highlighting
+✅ **Search Highlighting**: Visual feedback for search matches
+✅ **Error Handling**: Comprehensive error messages and recovery
+
+## Usage
+
+### Starting the Editor
 ```bash
 # Start with empty buffer
 cargo run
 
 # Load a specific file
-cargo run README.md
+cargo run filename.txt
 
-# Load and edit any text file
-cargo run path/to/your/file.txt
+# Build and run
+cargo build --release
+./target/release/vimlike_editor [filename]
 ```
 
-### Exit:
-Currently press `Ctrl+C` to exit (Day 6 will add proper `:q` command)
+### Basic Operations
+- **ESC**: Return to normal mode from any mode
+- **i**: Enter insert mode
+- **:**: Enter command mode
+- **/**: Enter search mode
+- **h/j/k/l**: Navigate (left/down/up/right)
+- **w/b**: Word navigation (forward/backward)
+- **G**: Go to end of file, **gg**: Go to beginning
+- **o/O**: Insert new line below/above
+- **dd**: Delete current line
+- **yy**: Yank (copy) current line
+- **p**: Put (paste) after cursor
+- **u**: Undo, **Ctrl+R**: Redo
 
-## Ready for Day 6
+### File Commands
+- **:w**: Save current file
+- **:w filename**: Save as filename
+- **:q**: Quit (with change detection)
+- **:q!**: Force quit (discard changes)
+- **:wq** or **:x**: Save and quit
+- **:e filename**: Edit new file
 
-The cleaned architecture provides a solid foundation for implementing cursor navigation:
-- Input handling modules ready for interactive key processing
-- Screen rendering pipeline for cursor feedback
-- Buffer and viewport management for navigation bounds
-- Terminal control for responsive cursor movement
+### Search Operations
+- **/pattern**: Search forward for pattern
+- **?pattern**: Search backward for pattern
+- **n**: Next match, **N**: Previous match
+- **ESC**: Exit search mode
 
-## Code Organization
+## Architecture
+
+### Module Organization
 
 ```
 src/
-├── main.rs          # Clean entry point
-├── editor.rs        # Core editor state and rendering
-├── buffer.rs        # Text buffer and position management  
-├── terminal.rs      # Low-level terminal control
-├── input.rs         # Key input and escape sequence parsing
-└── commands.rs      # Command system (for future expansion)
+├── main.rs              # Application entry point
+├── lib.rs              # Module exports
+├── editor.rs           # Core editor state and main event loop
+├── io.rs              # File I/O operations (load, save, edit)
+├── buffer.rs          # Text buffer with newline preservation
+├── terminal.rs        # Terminal control and rendering
+├── input.rs           # Key input handling and parsing
+├── commands.rs        # Command processing and execution
+└── history.rs         # Undo/redo system
 
 tests/
-└── daily_tests.rs   # Archived development tests
+├── buffer_tests.rs         # Buffer functionality tests
+├── command_mode_tests.rs   # Ex-command system tests
+├── file_io_tests.rs       # File I/O and newline preservation
+├── history_tests.rs       # Undo/redo system tests
+├── integration_tests.rs   # Core functionality integration
+├── newline_preservation_tests.rs # Newline handling edge cases
+├── search_tests.rs        # Search functionality tests
+└── additional_command_tests.rs # Extended command tests
 ```
 
-The cleanup maintains all functionality while providing a professional, maintainable codebase ready for the next phase of development.
+### Core Components
+
+#### Editor (`editor.rs`)
+- **Main event loop**: Handles all user input and mode transitions
+- **Mode management**: Coordinates between Normal, Insert, Command, Search modes
+- **Screen rendering**: Manages display updates and cursor positioning
+- **State management**: Tracks cursor, scroll, search matches, status messages
+
+#### Buffer (`buffer.rs`)
+- **Text storage**: Efficient line-based text representation
+- **Edit operations**: Character/line insertion, deletion, modification
+- **Position tracking**: Cursor and range position management
+- **Newline preservation**: Maintains original file formatting integrity
+
+#### File I/O (`io.rs`)
+- **File loading**: Read files with proper content parsing
+- **File saving**: Write files with newline preservation
+- **Error handling**: Comprehensive file operation error management
+- **New file creation**: Handle non-existent files gracefully
+
+#### Command System (`commands.rs`)
+- **Normal mode commands**: Movement, editing, operators
+- **Insert mode processing**: Character insertion and navigation
+- **Operator-motion combinations**: Complex command sequences
+- **Count prefix handling**: Numeric command multipliers
+
+#### History System (`history.rs`)
+- **Action tracking**: Record all buffer modifications
+- **Undo operations**: Reverse changes with cursor restoration
+- **Redo operations**: Reapply undone changes
+- **Insert mode grouping**: Batch related changes for better UX
+
+#### Terminal Interface (`terminal.rs`)
+- **Raw mode control**: Direct terminal input/output
+- **ANSI escape sequences**: Cursor movement and text formatting
+- **Screen management**: Clear, scroll, and refresh operations
+- **Cross-platform support**: Works on Unix/Linux/macOS
+
+## Testing
+
+Comprehensive test suite with **45+ tests** covering:
+- Core buffer operations and edge cases
+- File I/O with various content types
+- Command mode functionality
+- Search operations and highlighting
+- Undo/redo system integrity
+- Newline preservation across platforms
+- Integration scenarios
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific test suite
+cargo test --test buffer_tests
+cargo test --test command_mode_tests
+```
+
+## Technical Highlights
+
+### Performance
+- **Efficient text representation**: Line-based storage for O(1) line access
+- **Minimal allocations**: Reuse buffers and avoid unnecessary clones
+- **Responsive UI**: Non-blocking input handling with immediate feedback
+
+### Reliability
+- **Comprehensive error handling**: Graceful recovery from all error conditions
+- **Data integrity**: Robust undo/redo with consistent state management
+- **Memory safety**: Rust's ownership system prevents common editor bugs
+
+### Vim Compatibility
+- **Authentic behavior**: Faithful reproduction of vim's core functionality
+- **Standard key bindings**: Familiar navigation and editing commands
+- **Error messages**: Vim-style error codes and descriptions
+- **Mode transitions**: Proper ESC handling and mode switching
+
+## Future Extensions
+
+The architecture supports easy extension for:
+- **Visual mode**: Text selection and block operations
+- **Multiple buffers**: Tab/window management
+- **Syntax highlighting**: Language-aware text coloring
+- **Plugin system**: External command and feature integration
+- **Configuration**: User preferences and key mapping
+- **Advanced search**: Regular expressions and replace operations
+
+This editor provides a solid foundation for any text editing needs while maintaining the familiar vim workflow that developers love.

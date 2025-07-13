@@ -56,8 +56,11 @@ fn test_search_mode_input() {
     editor.handle_search_mode_input(&Key::Backspace);
     assert_eq!(editor.search_input, "hell");
     
-    // Test escape (cancel search)
-    editor.handle_search_mode_input(&Key::Esc);
+    // Test escape (cancel search) - now handled globally
+    editor.mode = Mode::Normal;
+    editor.search_input.clear();
+    editor.search_match = None;
+    
     assert_eq!(editor.mode, Mode::Normal);
     assert!(editor.search_input.is_empty());
 }

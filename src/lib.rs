@@ -7,3 +7,4 @@ pub mod input;
 pub mod editor;
 pub mod commands;
 pub mod history;
+pub mod io;

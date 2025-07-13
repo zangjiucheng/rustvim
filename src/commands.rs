@@ -322,7 +322,7 @@ impl Command for ModeSwitchCommand {
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::CommandMode => {
-                editor.mode = Mode::Command;
+                editor.start_command_mode();
             }
             ModeSwitchCommand::SearchForward => {
                 editor.start_search();

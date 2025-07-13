@@ -32,3 +32,24 @@ Line 2: Second line
 Line 3: Third line
 Line 4: Fourth line
 Line 5: Fifth line
+
+Command Mode Test File
+
+This file will be used to test:
+- Opening files with the editor
+- Command mode functionality
+- Saving files with :w
+- Quitting with :q
+
+Test scenarios:
+1. Load this file
+2. Make some edits
+3. Try :q (should warn about unsaved changes)
+4. Use :w to save
+5. Use :q to quit
+
+Additional tests:
+- :w newname.txt (save as)
+- :wq (write and quit)
+- :q! (force quit without saving)
+- :e otherfile.txt (edit new file)
