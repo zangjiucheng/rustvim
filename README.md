@@ -33,7 +33,7 @@ The editor is structured into logical modules:
 3. **Safety**: Rust's ownership system ensures memory safety
 4. **Extensibility**: Trait-based design allows for future improvements
 
-## Current Status (Day 12 Complete)
+## Current Status (Day 13 Complete)
 
 ✅ **Completed Features:**
 - **Project Foundation**: Cargo setup, Git repository, modular architecture
@@ -50,6 +50,7 @@ The editor is structured into logical modules:
 - **Yank/Paste System**: Copy (yy, yw) and paste (p, P) with register management
 - **Undo/Redo System**: Complete vim-like undo (u) and redo (Ctrl-R) functionality
 - **Insert Mode Grouping**: Intelligent change grouping for undo operations
+- **Search Functionality**: Pattern search (/) with next/previous (n/N), highlighting, and wrap-around
 - **Integration Testing**: Comprehensive test suite for all modules
 
 🎯 **Current Capabilities:**
@@ -58,13 +59,14 @@ The editor is structured into logical modules:
 - Text insertion, deletion, and navigation
 - Copy/paste operations with proper register handling
 - Full undo/redo support with vim-like behavior
+- Search through buffer with pattern highlighting
 - Professional status line and interface
 
-📅 **Next Steps (Days 13-30):**
-- Search functionality (find in buffer)
+📅 **Next Steps (Days 14-30):**
 - Command-line mode (Ex commands for file I/O)
 - Visual mode and advanced text selection
 - Multiple buffers and buffer switching
+- Configuration and settings system
 
 ## Documentation
 
@@ -105,6 +107,7 @@ cargo test --test integration_tests
 - **Navigation**: Use `hjkl` or arrow keys, `0`/`$` for line start/end, `gg`/`G` for file start/end
 - **Editing**: Press `i` to enter Insert mode, type text, press `ESC` to return to Normal mode
 - **Advanced**: Word navigation (`w`, `b`, `e`), deletion (`x`, `dd`), copy/paste (`yy`, `p`)
+- **Search**: Press `/` to search, `n` for next match, `N` for previous match
 - **Undo/Redo**: Use `u` to undo changes, `Ctrl-R` to redo
 - **Exit**: Press `Ctrl+Q` to quit the editor
 
@@ -114,6 +117,7 @@ Navigation:     h j k l (arrows), 0 $ gg G, w b e
 Insert modes:   i a A o O
 Edit:           x (delete char), dd (delete line) 
 Copy/Paste:     yy yw (yank), p P (paste)
+Search:         / (search), n (next), N (previous)
 Undo/Redo:      u (undo), Ctrl-R (redo)
 Exit:           Ctrl+Q
 ```

@@ -10,6 +10,7 @@ pub enum Mode {
     Insert,
     Command,
     Visual,
+    Search,
 }
 
 /// Represents a cursor position in the buffer
@@ -77,6 +78,15 @@ pub struct Editor {
     
     /// Tracks changes during insert mode for grouping
     pub insert_mode_changes: Option<InsertModeGroup>,
+    
+    /// Current search query (for search mode and repeat search)
+    pub search_query: Option<String>,
+    
+    /// Current search input buffer (while typing search query)
+    pub search_input: String,
+    
+    /// Position of current search match (for highlighting)
+    pub search_match: Option<(usize, usize, usize)>, // (row, col, length)
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -133,6 +143,9 @@ impl Editor {
             register: Register::new(),
             history: History::new(),
             insert_mode_changes: None,
+            search_query: None,
+            search_input: String::new(),
+            search_match: None,
         }
     }
     
@@ -151,6 +164,11 @@ impl Editor {
         while self.running {
             // Read key input
             let key = input_handler.read_key()?;
+            
+            // Clear status message on any key press (except in search mode)
+            if self.mode != Mode::Search {
+                self.clear_status_message();
+            }
             
             // Handle global commands first
             match &key {
@@ -193,6 +211,9 @@ impl Editor {
                 }
                 Mode::Visual => {
                     // TODO: Implement visual mode handling
+                }
+                Mode::Search => {
+                    self.handle_search_mode_input(&key);
                 }
             }
             
@@ -242,7 +263,35 @@ impl Editor {
             if buffer_row < self.buffer.line_count() {
                 // Draw actual buffer line
                 if let Some(line) = self.buffer.get_line(buffer_row) {
-                    self.terminal.write_truncated(line, cols)?;
+                    // Check if this line has a search match to highlight
+                    if let Some((match_row, match_col, match_len)) = self.search_match {
+                        if buffer_row == match_row {
+                            // Split line into parts: before match, match, after match
+                            let before = &line[..match_col.min(line.len())];
+                            let match_end = (match_col + match_len).min(line.len());
+                            let matched = &line[match_col.min(line.len())..match_end];
+                            let after = &line[match_end..];
+                            
+                            // Write before match
+                            if !before.is_empty() {
+                                self.terminal.write(before)?;
+                            }
+                            
+                            // Write highlighted match
+                            if !matched.is_empty() {
+                                self.terminal.write_highlighted(matched)?;
+                            }
+                            
+                            // Write after match
+                            if !after.is_empty() {
+                                self.terminal.write(after)?;
+                            }
+                        } else {
+                            self.terminal.write_truncated(line, cols)?;
+                        }
+                    } else {
+                        self.terminal.write_truncated(line, cols)?;
+                    }
                 }
             } else {
                 // Draw tilde for empty lines (like Vim)
@@ -267,7 +316,22 @@ impl Editor {
         // Move to status line (last row)
         self.terminal.move_cursor(rows, 1)?;
         
-        // Create status line content
+        // Handle search mode specially
+        if self.mode == Mode::Search {
+            let search_prompt = format!("/{}", self.search_input);
+            let padded_prompt = format!("{}{}", search_prompt, " ".repeat(cols.saturating_sub(search_prompt.len())));
+            self.terminal.write_highlighted(&padded_prompt)?;
+            return Ok(());
+        }
+        
+        // Handle status messages
+        if let Some(ref msg) = self.status_msg {
+            let padded_msg = format!("{}{}", msg, " ".repeat(cols.saturating_sub(msg.len())));
+            self.terminal.write_highlighted(&padded_msg)?;
+            return Ok(());
+        }
+        
+        // Create regular status line content
         let filename = self.filename.as_deref().unwrap_or("[No Name]");
         let modified = if self.modified { " [Modified]" } else { "" };
         let mode = format!("{:?}", self.mode);
@@ -504,6 +568,267 @@ impl Editor {
         changes.inserted_text = initial_text;
         self.insert_mode_changes = Some(changes);
     }
+    
+    /// Start search mode with / command
+    pub fn start_search(&mut self) {
+        self.mode = Mode::Search;
+        self.search_input.clear();
+        self.search_match = None; // Clear previous highlighting
+    }
+    
+    /// Handle input in search mode
+    pub fn handle_search_mode_input(&mut self, key: &crate::input::Key) {
+        match key {
+            crate::input::Key::Enter => {
+                // Execute search
+                if !self.search_input.is_empty() {
+                    self.search_query = Some(self.search_input.clone());
+                    self.search_forward(&self.search_input.clone());
+                }
+                self.mode = Mode::Normal;
+                self.search_input.clear();
+            }
+            crate::input::Key::Esc => {
+                // Cancel search
+                self.mode = Mode::Normal;
+                self.search_input.clear();
+                self.search_match = None;
+            }
+            crate::input::Key::Backspace => {
+                // Remove last character from search query
+                self.search_input.pop();
+            }
+            crate::input::Key::Char(c) => {
+                // Add character to search query
+                self.search_input.push(*c);
+            }
+            _ => {
+                // Ignore other keys in search mode
+            }
+        }
+    }
+    
+    /// Search forward from current cursor position
+    pub fn search_forward(&mut self, query: &str) {
+        if query.is_empty() {
+            return;
+        }
+        
+        // Save the query for repeat searches
+        self.search_query = Some(query.to_string());
+        
+        let start_row = self.cursor.row;
+        let start_col = self.cursor.col + 1; // Start after current position
+        
+        self.search_from_position(query, start_row, start_col);
+    }
+    
+    /// Search from a specific position
+    fn search_from_position(&mut self, query: &str, start_row: usize, start_col: usize) {
+        // Search from given position to end of buffer
+        if let Some((row, col)) = self.find_text_from_position(query, start_row, start_col) {
+            self.move_cursor_to_match(row, col, query.len());
+            return;
+        }
+        
+        // If not found after start position, wrap around and search from beginning
+        if let Some((row, col)) = self.find_text_from_position(query, 0, 0) {
+            if row < start_row || (row == start_row && col < start_col) {
+                self.move_cursor_to_match(row, col, query.len());
+                self.set_status_message("Search wrapped around".to_string());
+                return;
+            }
+        }
+        
+        // Pattern not found
+        self.set_status_message("Pattern not found".to_string());
+        self.search_match = None;
+    }
+    
+    /// Search for next occurrence of last query
+    pub fn search_next(&mut self) {
+        if let Some(ref query) = self.search_query.clone() {
+            // If we have a current match, start searching after it
+            let (start_row, start_col) = if let Some((row, col, length)) = self.search_match {
+                (row, col + length)
+            } else {
+                (self.cursor.row, self.cursor.col + 1)
+            };
+            
+            self.search_from_position(query, start_row, start_col);
+        }
+    }
+    
+    /// Search for previous occurrence of last query
+    pub fn search_previous(&mut self) {
+        if let Some(ref query) = self.search_query.clone() {
+            // If we have a current match, start searching before it
+            let (start_row, start_col) = if let Some((row, col, _length)) = self.search_match {
+                if col > 0 {
+                    (row, col - 1)
+                } else if row > 0 {
+                    // Move to end of previous line
+                    let prev_row = row - 1;
+                    let prev_line_len = self.buffer.get_line(prev_row)
+                        .map(|line| line.len())
+                        .unwrap_or(0);
+                    (prev_row, prev_line_len)
+                } else {
+                    // At beginning of buffer, search from end
+                    let last_row = self.buffer.line_count().saturating_sub(1);
+                    let last_col = self.buffer.get_line(last_row)
+                        .map(|line| line.len())
+                        .unwrap_or(0);
+                    (last_row, last_col)
+                }
+            } else {
+                (self.cursor.row, self.cursor.col)
+            };
+            
+            self.search_backward_from_position(query, start_row, start_col);
+        }
+    }
+    
+    /// Search backward from current cursor position
+    pub fn search_backward(&mut self, query: &str) {
+        if query.is_empty() {
+            return;
+        }
+        
+        // Save the query for repeat searches
+        self.search_query = Some(query.to_string());
+        
+        self.search_backward_from_position(query, self.cursor.row, self.cursor.col);
+    }
+    
+    /// Search backward from a specific position
+    fn search_backward_from_position(&mut self, query: &str, start_row: usize, start_col: usize) {
+        // Search from beginning to current position
+        let mut last_match: Option<(usize, usize)> = None;
+        
+        for row in 0..=start_row {
+            if let Some(line) = self.buffer.get_line(row) {
+                let search_limit = if row == start_row {
+                    start_col.min(line.len())
+                } else {
+                    line.len()
+                };
+                
+                let search_text = &line[..search_limit];
+                let mut start = 0;
+                
+                while let Some(pos) = search_text[start..].find(query) {
+                    let actual_pos = start + pos;
+                    
+                    // Skip the current match if we're sitting on it
+                    if let Some((current_row, current_col, _)) = self.search_match {
+                        if row == current_row && actual_pos == current_col {
+                            start = actual_pos + 1;
+                            continue;
+                        }
+                    }
+                    
+                    last_match = Some((row, actual_pos));
+                    start = actual_pos + 1;
+                    
+                    if start >= search_limit {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if let Some((row, col)) = last_match {
+            self.move_cursor_to_match(row, col, query.len());
+        } else {
+            // If not found before cursor, wrap around and search from end
+            self.search_backward_wrap_around(query);
+        }
+    }
+    
+    /// Wrap around search for backward direction
+    fn search_backward_wrap_around(&mut self, query: &str) {
+        let mut last_match_wrapped: Option<(usize, usize)> = None;
+        
+        // Search the entire buffer from the end to find the last occurrence
+        for row in 0..self.buffer.line_count() {
+            if let Some(line) = self.buffer.get_line(row) {
+                let mut start = 0;
+                
+                // Find all occurrences in this line and keep the last one
+                while let Some(pos) = line[start..].find(query) {
+                    let actual_pos = start + pos;
+                    
+                    // Only consider matches that are after our current position (for wrap-around)
+                    // or if we're not on the same row
+                    if row > self.cursor.row || (row == self.cursor.row && actual_pos > self.cursor.col) {
+                        last_match_wrapped = Some((row, actual_pos));
+                    }
+                    
+                    start = actual_pos + 1;
+                }
+            }
+        }
+        
+        // If no match found after cursor, find the very last match in the entire buffer
+        if last_match_wrapped.is_none() {
+            for row in 0..self.buffer.line_count() {
+                if let Some(line) = self.buffer.get_line(row) {
+                    let mut start = 0;
+                    
+                    while let Some(pos) = line[start..].find(query) {
+                        let actual_pos = start + pos;
+                        last_match_wrapped = Some((row, actual_pos));
+                        start = actual_pos + 1;
+                    }
+                }
+            }
+        }
+        
+        if let Some((row, col)) = last_match_wrapped {
+            self.move_cursor_to_match(row, col, query.len());
+            self.set_status_message("Search wrapped around".to_string());
+        } else {
+            self.set_status_message("Pattern not found".to_string());
+            self.search_match = None;
+        }
+    }
+    
+    /// Find text starting from a specific position
+    fn find_text_from_position(&self, query: &str, start_row: usize, start_col: usize) -> Option<(usize, usize)> {
+        for row in start_row..self.buffer.line_count() {
+            if let Some(line) = self.buffer.get_line(row) {
+                let search_start = if row == start_row { start_col } else { 0 };
+                
+                if search_start < line.len() {
+                    let search_text = &line[search_start..];
+                    if let Some(pos) = search_text.find(query) {
+                        return Some((row, search_start + pos));
+                    }
+                }
+            }
+        }
+        None
+    }
+    
+    /// Move cursor to search match and set up highlighting
+    fn move_cursor_to_match(&mut self, row: usize, col: usize, length: usize) {
+        self.cursor.row = row;
+        self.cursor.col = col;
+        self.search_match = Some((row, col, length));
+        self.update_scroll();
+    }
+    
+    /// Set a temporary status message
+    pub fn set_status_message(&mut self, message: String) {
+        self.status_msg = Some(message);
+    }
+    
+    /// Clear status message
+    pub fn clear_status_message(&mut self) {
+        self.status_msg = None;
+    }
+
 }
 
 /// Tracks changes made during a single insert mode session
@@ -554,3 +879,5 @@ impl InsertModeGroup {
         !self.inserted_text.is_empty() || !self.deleted_text.is_empty()
     }
 }
+
+

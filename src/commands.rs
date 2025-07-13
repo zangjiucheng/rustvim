@@ -192,6 +192,10 @@ pub enum EditCommand {
     /// Undo/Redo
     Undo,             // u
     Redo,             // Ctrl-R
+    
+    /// Search commands
+    SearchNext,       // n
+    SearchPrevious,   // N
 }
 
 impl Command for EditCommand {
@@ -235,6 +239,14 @@ impl Command for EditCommand {
             }
             EditCommand::Redo => {
                 editor.redo();
+                Ok(())
+            }
+            EditCommand::SearchNext => {
+                editor.search_next();
+                Ok(())
+            }
+            EditCommand::SearchPrevious => {
+                editor.search_previous();
                 Ok(())
             }
         }
@@ -312,8 +324,13 @@ impl Command for ModeSwitchCommand {
             ModeSwitchCommand::CommandMode => {
                 editor.mode = Mode::Command;
             }
-            _ => {
-                // TODO: Implement search modes
+            ModeSwitchCommand::SearchForward => {
+                editor.start_search();
+            }
+            ModeSwitchCommand::SearchBackward => {
+                // For now, implement backward search the same as forward
+                // In a more complete implementation, this could be a separate mode
+                editor.start_search();
             }
         }
         Ok(())
@@ -1196,6 +1213,10 @@ impl CommandProcessor {
             Key::Char('x') => Some(NormalCommand::Edit(EditCommand::DeleteChar)),
             Key::Char('u') => Some(NormalCommand::Edit(EditCommand::Undo)),
             Key::Ctrl('r') => Some(NormalCommand::Edit(EditCommand::Redo)),
+            
+            // Search repeat commands
+            Key::Char('n') => Some(NormalCommand::Edit(EditCommand::SearchNext)),
+            Key::Char('N') => Some(NormalCommand::Edit(EditCommand::SearchPrevious)),
             
             Key::Char('p') => Some(NormalCommand::Edit(EditCommand::PasteAfter)),
             Key::Char('P') => Some(NormalCommand::Edit(EditCommand::PasteBefore)),
