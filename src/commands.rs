@@ -101,7 +101,7 @@ impl Motion for MovementCommand {
                     }
                 }
                 MovementCommand::Right => {
-                    let line_len = editor.buffer.line_length(temp_row);
+                    let line_len = editor.buffer().line_length(temp_row);
                     if temp_col < line_len.saturating_sub(1) {
                         temp_col += 1;
                     }
@@ -109,14 +109,14 @@ impl Motion for MovementCommand {
                 MovementCommand::Up => {
                     if temp_row > 0 {
                         temp_row -= 1;
-                        let line_len = editor.buffer.line_length(temp_row);
+                        let line_len = editor.buffer().line_length(temp_row);
                         temp_col = temp_col.min(line_len.saturating_sub(1));
                     }
                 }
                 MovementCommand::Down => {
-                    if temp_row + 1 < editor.buffer.line_count() {
+                    if temp_row + 1 < editor.buffer().line_count() {
                         temp_row += 1;
-                        let line_len = editor.buffer.line_length(temp_row);
+                        let line_len = editor.buffer().line_length(temp_row);
                         temp_col = temp_col.min(line_len.saturating_sub(1));
                     }
                 }
@@ -130,7 +130,7 @@ impl Motion for MovementCommand {
                     MotionCalculator::word_end(editor, &mut temp_row, &mut temp_col);
                 }
                 MovementCommand::LineFirstChar => {
-                    if let Some(line) = editor.buffer.get_line(temp_row) {
+                    if let Some(line) = editor.buffer().get_line(temp_row) {
                         temp_col = line.chars()
                             .position(|c| !c.is_whitespace())
                             .unwrap_or(0);
@@ -142,7 +142,7 @@ impl Motion for MovementCommand {
                     break;
                 }
                 MovementCommand::LineEnd => {
-                    let line_len = editor.buffer.line_length(temp_row);
+                    let line_len = editor.buffer().line_length(temp_row);
                     temp_col = if line_len > 0 { line_len - 1 } else { 0 };
                     break;
                 }
@@ -152,8 +152,8 @@ impl Motion for MovementCommand {
                     break;
                 }
                 MovementCommand::FileEnd => {
-                    temp_row = editor.buffer.line_count().saturating_sub(1);
-                    let line_len = editor.buffer.line_length(temp_row);
+                    temp_row = editor.buffer().line_count().saturating_sub(1);
+                    let line_len = editor.buffer().line_length(temp_row);
                     temp_col = if line_len > 0 { line_len - 1 } else { 0 };
                     break;
                 }
@@ -282,40 +282,40 @@ impl Command for ModeSwitchCommand {
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertAfter => {
-                let line_len = editor.buffer.line_length(editor.cursor.row);
-                if editor.cursor.col < line_len {
-                    editor.cursor.col += 1;
+                let line_len = editor.buffer().line_length(editor.cursor().row);
+                if editor.cursor().col < line_len {
+                    editor.cursor_mut().col += 1;
                 }
                 editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertLineEnd => {
-                let line_len = editor.buffer.line_length(editor.cursor.row);
-                editor.cursor.col = line_len;
+                let line_len = editor.buffer().line_length(editor.cursor().row);
+                editor.cursor_mut().col = line_len;
                 editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::InsertLineStart => {
-                editor.cursor.col = 0;
+                editor.cursor_mut().col = 0;
                 editor.start_insert_mode();
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::OpenLineBelow => {
-                let pos = crate::buffer::Position::new(editor.cursor.row, editor.buffer.line_length(editor.cursor.row));
-                editor.buffer.insert_newline(pos);
-                editor.cursor.row += 1;
-                editor.cursor.col = 0;
-                editor.modified = true;
+                let pos = crate::buffer::Position::new(editor.cursor().row, editor.buffer().line_length(editor.cursor().row));
+                editor.buffer_mut().insert_newline(pos);
+                editor.cursor_mut().row += 1;
+                editor.cursor_mut().col = 0;
+                editor.set_modified(true);
                 editor.update_scroll();
                 // Start insert mode with the newline already included
                 editor.start_insert_mode_with_initial_text(pos, "\n".to_string());
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::OpenLineAbove => {
-                let pos = crate::buffer::Position::new(editor.cursor.row, 0);
-                editor.buffer.insert_newline(pos);
-                editor.cursor.col = 0;
-                editor.modified = true;
+                let pos = crate::buffer::Position::new(editor.cursor().row, 0);
+                editor.buffer_mut().insert_newline(pos);
+                editor.cursor_mut().col = 0;
+                editor.set_modified(true);
                 editor.update_scroll();
                 // Start insert mode with the newline already included
                 editor.start_insert_mode_with_initial_text(pos, "\n".to_string());
@@ -366,15 +366,15 @@ impl MotionCalculator {
     /// Move cursor to the beginning of the next word (w command)
     pub fn word_forward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
-            if let Some(line) = editor.buffer.get_line(*row) {
+            if let Some(line) = editor.buffer().get_line(*row) {
                 let chars: Vec<char> = line.chars().collect();
                 
                 if *col >= chars.len() {
-                    if *row + 1 < editor.buffer.line_count() {
+                    if *row + 1 < editor.buffer().line_count() {
                         *row += 1;
                         *col = 0;
                         
-                        if let Some(next_line) = editor.buffer.get_line(*row) {
+                        if let Some(next_line) = editor.buffer().get_line(*row) {
                             let next_chars: Vec<char> = next_line.chars().collect();
                             
                             if next_chars.is_empty() {
@@ -420,13 +420,13 @@ impl MotionCalculator {
     /// Move cursor to the beginning of the previous word (b command)
     pub fn word_backward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
-            if let Some(line) = editor.buffer.get_line(*row) {
+            if let Some(line) = editor.buffer().get_line(*row) {
                 let chars: Vec<char> = line.chars().collect();
                 
                 if *col == 0 {
                     if *row > 0 {
                         *row -= 1;
-                        if let Some(prev_line) = editor.buffer.get_line(*row) {
+                        if let Some(prev_line) = editor.buffer().get_line(*row) {
                             let prev_chars: Vec<char> = prev_line.chars().collect();
                             
                             if prev_chars.is_empty() {
@@ -449,7 +449,7 @@ impl MotionCalculator {
                     if *col == 0 && (chars[*col].is_whitespace() || (!Self::is_word_char(chars[*col]) && !chars[*col].is_whitespace())) {
                         if *row > 0 {
                             *row -= 1;
-                            if let Some(prev_line) = editor.buffer.get_line(*row) {
+                            if let Some(prev_line) = editor.buffer().get_line(*row) {
                                 let prev_chars: Vec<char> = prev_line.chars().collect();
                                 
                                 if prev_chars.is_empty() {
@@ -478,13 +478,13 @@ impl MotionCalculator {
     
     /// Move cursor to the end of the current/next word (e command)
     pub fn word_end(editor: &Editor, row: &mut usize, col: &mut usize) {
-        if let Some(line) = editor.buffer.get_line(*row) {
+        if let Some(line) = editor.buffer().get_line(*row) {
             let chars: Vec<char> = line.chars().collect();
             
             if chars.is_empty() {
-                while *row + 1 < editor.buffer.line_count() {
+                while *row + 1 < editor.buffer().line_count() {
                     *row += 1;
-                    if let Some(next_line) = editor.buffer.get_line(*row) {
+                    if let Some(next_line) = editor.buffer().get_line(*row) {
                         let next_chars: Vec<char> = next_line.chars().collect();
                         if !next_chars.is_empty() {
                             *col = 0;
@@ -505,7 +505,7 @@ impl MotionCalculator {
             }
             
             if *col >= chars.len() {
-                if *row + 1 < editor.buffer.line_count() {
+                if *row + 1 < editor.buffer().line_count() {
                     *row += 1;
                     *col = 0;
                 }
@@ -525,10 +525,10 @@ impl MotionCalculator {
                             *col += 1;
                         }
                         *col = col.saturating_sub(1);
-                    } else if *row + 1 < editor.buffer.line_count() {
+                    } else if *row + 1 < editor.buffer().line_count() {
                         *row += 1;
                         *col = 0;
-                        if let Some(next_line) = editor.buffer.get_line(*row) {
+                        if let Some(next_line) = editor.buffer().get_line(*row) {
                             let next_chars: Vec<char> = next_line.chars().collect();
                             
                             if next_chars.is_empty() {
@@ -557,20 +557,20 @@ impl TextOperations {
     /// Delete character at cursor position
     pub fn delete_char_at_cursor(editor: &mut Editor) {
         let cursor_pos = editor.cursor_position();
-        if let Some(deleted_char) = editor.buffer.delete_char(cursor_pos) {
+        if let Some(deleted_char) = editor.buffer_mut().delete_char(cursor_pos) {
             // Record the deletion for undo
             let action = crate::history::EditAction::delete_text(cursor_pos, deleted_char.to_string());
-            editor.history.push(action);
+            editor.history_mut().push(action);
             
             // Store the deleted character in the register
             editor.register.store_text(deleted_char.to_string());
             
-            editor.modified = true;
-            let line_len = editor.buffer.line_length(editor.cursor.row);
-            if editor.cursor.col >= line_len && line_len > 0 {
-                editor.cursor.col = line_len - 1;
-            } else if line_len == 0 && editor.cursor.col > 0 {
-                editor.cursor.col = 0;
+            editor.set_modified(true);
+            let line_len = editor.buffer().line_length(editor.cursor().row);
+            if editor.cursor().col >= line_len && line_len > 0 {
+                editor.cursor_mut().col = line_len - 1;
+            } else if line_len == 0 && editor.cursor().col > 0 {
+                editor.cursor_mut().col = 0;
             }
             editor.update_scroll();
         }
@@ -591,26 +591,26 @@ impl TextOperations {
         if from_row == to_row {
             if from_col < to_col {
                 for _ in from_col..to_col {
-                    if from_col < editor.buffer.line_length(from_row) {
+                    if from_col < editor.buffer().line_length(from_row) {
                         let pos = crate::buffer::Position::new(from_row, from_col);
-                        editor.buffer.delete_char(pos);
+                        editor.buffer_mut().delete_char(pos);
                     }
                 }
             } else if from_col > to_col {
                 for _ in to_col..from_col {
-                    if to_col < editor.buffer.line_length(from_row) {
+                    if to_col < editor.buffer().line_length(from_row) {
                         let pos = crate::buffer::Position::new(from_row, to_col);
-                        editor.buffer.delete_char(pos);
+                        editor.buffer_mut().delete_char(pos);
                     }
                 }
             }
         } else {
             if from_row < to_row {
-                let start_line_len = editor.buffer.line_length(from_row);
+                let start_line_len = editor.buffer().line_length(from_row);
                 for _ in from_col..start_line_len {
-                    if from_col < editor.buffer.line_length(from_row) {
+                    if from_col < editor.buffer().line_length(from_row) {
                         let pos = crate::buffer::Position::new(from_row, from_col);
-                        editor.buffer.delete_char(pos);
+                        editor.buffer_mut().delete_char(pos);
                     }
                 }
                 
@@ -619,29 +619,29 @@ impl TextOperations {
                 }
                 
                 let adjusted_end_row = from_row + 1;
-                if adjusted_end_row < editor.buffer.line_count() {
+                if adjusted_end_row < editor.buffer().line_count() {
                     for _ in 0..to_col {
-                        if 0 < editor.buffer.line_length(adjusted_end_row) {
+                        if 0 < editor.buffer().line_length(adjusted_end_row) {
                             let pos = crate::buffer::Position::new(adjusted_end_row, 0);
-                            editor.buffer.delete_char(pos);
+                            editor.buffer_mut().delete_char(pos);
                         }
                     }
                     
-                    if let Some(remaining_text) = editor.buffer.get_line(adjusted_end_row) {
+                    if let Some(remaining_text) = editor.buffer().get_line(adjusted_end_row) {
                         let remaining = remaining_text.clone();
                         Self::delete_line_at(editor, adjusted_end_row);
                         
                         for ch in remaining.chars() {
-                            let pos = crate::buffer::Position::new(from_row, editor.buffer.line_length(from_row));
-                            editor.buffer.insert_char(pos, ch);
+                            let pos = crate::buffer::Position::new(from_row, editor.buffer().line_length(from_row));
+                            editor.buffer_mut().insert_char(pos, ch);
                         }
                     }
                 }
             } else {
                 for _ in 0..from_col {
-                    if 0 < editor.buffer.line_length(from_row) {
+                    if 0 < editor.buffer().line_length(from_row) {
                         let pos = crate::buffer::Position::new(from_row, 0);
-                        editor.buffer.delete_char(pos);
+                        editor.buffer_mut().delete_char(pos);
                     }
                 }
                 
@@ -654,43 +654,43 @@ impl TextOperations {
     
     /// Delete a line at specific row
     pub fn delete_line_at(editor: &mut Editor, row: usize) {
-        let line_len = editor.buffer.line_length(row);
+        let line_len = editor.buffer().line_length(row);
         for _ in 0..line_len {
             let pos = crate::buffer::Position::new(row, 0);
-            editor.buffer.delete_char(pos);
+            editor.buffer_mut().delete_char(pos);
         }
         
-        if row < editor.buffer.line_count() - 1 {
+        if row < editor.buffer().line_count() - 1 {
             let pos = crate::buffer::Position::new(row, 0);
-            if editor.buffer.line_length(row) == 0 {
-                editor.buffer.delete_char(pos);
+            if editor.buffer().line_length(row) == 0 {
+                editor.buffer_mut().delete_char(pos);
             }
         }
     }
     
     /// Clear a line at specific row
     pub fn clear_line_at(editor: &mut Editor, row: usize) {
-        let line_len = editor.buffer.line_length(row);
+        let line_len = editor.buffer().line_length(row);
         for _ in 0..line_len {
             let pos = crate::buffer::Position::new(row, 0);
-            editor.buffer.delete_char(pos);
+            editor.buffer_mut().delete_char(pos);
         }
     }
     
     /// Extract text from a range without modifying the buffer (for yank operations)
     pub fn extract_range(editor: &Editor, start: (usize, usize), end: (usize, usize)) -> String {
-        editor.buffer.extract_range(start, end)
+        editor.buffer().extract_range(start, end)
     }
     
     /// Ensure cursor is within valid buffer bounds
     pub fn clamp_cursor_to_buffer(editor: &mut Editor) {
-        editor.cursor.row = editor.cursor.row.min(editor.buffer.line_count().saturating_sub(1));
+        editor.cursor_mut().row = editor.cursor().row.min(editor.buffer().line_count().saturating_sub(1));
         
-        let line_len = editor.buffer.line_length(editor.cursor.row);
+        let line_len = editor.buffer().line_length(editor.cursor().row);
         if line_len > 0 {
-            editor.cursor.col = editor.cursor.col.min(line_len - 1);
+            editor.cursor_mut().col = editor.cursor().col.min(line_len - 1);
         } else {
-            editor.cursor.col = 0;
+            editor.cursor_mut().col = 0;
         }
     }
 }
@@ -716,11 +716,11 @@ impl MovementExecutor {
                     editor.cursor_down();
                 }
                 MovementCommand::LineStart => {
-                    editor.cursor.col = 0;
+                    editor.cursor_mut().col = 0;
                     break;
                 }
                 MovementCommand::LineFirstChar => {
-                    let line = if let Some(line) = editor.buffer.get_line(editor.cursor.row) {
+                    let line = if let Some(line) = editor.buffer().get_line(editor.cursor().row) {
                         line
                     } else {
                         break;
@@ -729,45 +729,45 @@ impl MovementExecutor {
                     let first_non_blank = line.chars()
                         .position(|c| !c.is_whitespace())
                         .unwrap_or(0);
-                    editor.cursor.col = first_non_blank;
+                    editor.cursor_mut().col = first_non_blank;
                     break;
                 }
                 MovementCommand::LineEnd => {
-                    let line_len = editor.buffer.line_length(editor.cursor.row);
-                    editor.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
+                    let line_len = editor.buffer().line_length(editor.cursor().row);
+                    editor.cursor_mut().col = if line_len > 0 { line_len - 1 } else { 0 };
                     break;
                 }
                 MovementCommand::FileStart => {
-                    editor.cursor.row = 0;
-                    editor.cursor.col = 0;
+                    editor.cursor_mut().row = 0;
+                    editor.cursor_mut().col = 0;
                     break;
                 }
                 MovementCommand::FileEnd => {
-                    editor.cursor.row = editor.buffer.line_count().saturating_sub(1);
-                    let line_len = editor.buffer.line_length(editor.cursor.row);
-                    editor.cursor.col = if line_len > 0 { line_len - 1 } else { 0 };
+                    editor.cursor_mut().row = editor.buffer().line_count().saturating_sub(1);
+                    let line_len = editor.buffer().line_length(editor.cursor().row);
+                    editor.cursor_mut().col = if line_len > 0 { line_len - 1 } else { 0 };
                     break;
                 }
                 MovementCommand::WordForward => {
-                    let mut row = editor.cursor.row;
-                    let mut col = editor.cursor.col;
+                    let mut row = editor.cursor().row;
+                    let mut col = editor.cursor().col;
                     MotionCalculator::word_forward(editor, &mut row, &mut col);
-                    editor.cursor.row = row;
-                    editor.cursor.col = col;
+                    editor.cursor_mut().row = row;
+                    editor.cursor_mut().col = col;
                 }
                 MovementCommand::WordBackward => {
-                    let mut row = editor.cursor.row;
-                    let mut col = editor.cursor.col;
+                    let mut row = editor.cursor().row;
+                    let mut col = editor.cursor().col;
                     MotionCalculator::word_backward(editor, &mut row, &mut col);
-                    editor.cursor.row = row;
-                    editor.cursor.col = col;
+                    editor.cursor_mut().row = row;
+                    editor.cursor_mut().col = col;
                 }
                 MovementCommand::WordEnd => {
-                    let mut row = editor.cursor.row;
-                    let mut col = editor.cursor.col;
+                    let mut row = editor.cursor().row;
+                    let mut col = editor.cursor().col;
                     MotionCalculator::word_end(editor, &mut row, &mut col);
-                    editor.cursor.row = row;
-                    editor.cursor.col = col;
+                    editor.cursor_mut().row = row;
+                    editor.cursor_mut().col = col;
                 }
                 _ => {
                     break;
@@ -784,14 +784,14 @@ pub struct OperatorExecutor;
 impl OperatorExecutor {
     /// Execute delete line command (dd)
     pub fn execute_delete_line(editor: &mut Editor, count: usize) {
-        let start_row = editor.cursor.row;
+        let start_row = editor.cursor().row;
         let mut deleted_lines = Vec::new();
         
         // First, collect the lines to be deleted for the register
         for i in 0..count {
             let row = start_row + i;
-            if row < editor.buffer.line_count() {
-                if let Some(line) = editor.buffer.get_line(row) {
+            if row < editor.buffer().line_count() {
+                if let Some(line) = editor.buffer().get_line(row) {
                     deleted_lines.push(line.clone());
                 }
             }
@@ -805,42 +805,42 @@ impl OperatorExecutor {
             // Record the line deletion for undo
             let delete_pos = crate::buffer::Position::new(start_row, 0);
             let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
-            editor.history.push(action);
+            editor.history_mut().push(action);
         }
         
         // Now delete the lines
         for _ in 0..count {
-            if editor.buffer.line_count() > 1 {
-                if let Some(_deleted_line) = editor.buffer.get_line(editor.cursor.row) {
-                    TextOperations::delete_line_at(editor, editor.cursor.row);
+            if editor.buffer().line_count() > 1 {
+                if let Some(_deleted_line) = editor.buffer().get_line(editor.cursor().row) {
+                    TextOperations::delete_line_at(editor, editor.cursor().row);
                     
-                    if editor.cursor.row >= editor.buffer.line_count() {
-                        editor.cursor.row = editor.buffer.line_count().saturating_sub(1);
+                    if editor.cursor().row >= editor.buffer().line_count() {
+                        editor.cursor_mut().row = editor.buffer().line_count().saturating_sub(1);
                     }
                     
-                    let line_len = editor.buffer.line_length(editor.cursor.row);
-                    if editor.cursor.col >= line_len && line_len > 0 {
-                        editor.cursor.col = line_len - 1;
+                    let line_len = editor.buffer().line_length(editor.cursor().row);
+                    if editor.cursor().col >= line_len && line_len > 0 {
+                        editor.cursor_mut().col = line_len - 1;
                     } else if line_len == 0 {
-                        editor.cursor.col = 0;
+                        editor.cursor_mut().col = 0;
                     }
                 }
             } else {
-                if let Some(_line) = editor.buffer.get_line(0) {
+                if let Some(_line) = editor.buffer().get_line(0) {
                     TextOperations::clear_line_at(editor, 0);
-                    editor.cursor.col = 0;
+                    editor.cursor_mut().col = 0;
                 }
                 break;
             }
         }
         
-        editor.modified = true;
+        editor.set_modified(true);
         editor.update_scroll();
     }
     
     /// Execute delete with motion command (dw, d$, etc.)
     pub fn execute_delete_motion(editor: &mut Editor, motion: MovementCommand, count: usize) {
-        let start_pos = (editor.cursor.row, editor.cursor.col);
+        let start_pos = (editor.cursor().row, editor.cursor().col);
         let end_pos = motion.calculate_end_position(editor, start_pos, count);
         
         // Extract text for register before deleting
@@ -865,7 +865,7 @@ impl OperatorExecutor {
             };
             let delete_pos = crate::buffer::Position::new(delete_row, delete_col);
             let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
-            editor.history.push(action);
+            editor.history_mut().push(action);
         }
         
         let final_cursor_pos = match motion {
@@ -879,24 +879,24 @@ impl OperatorExecutor {
         
         TextOperations::delete_range(editor, start_pos, end_pos);
         
-        editor.cursor.row = final_cursor_pos.0;
-        editor.cursor.col = final_cursor_pos.1;
+        editor.cursor_mut().row = final_cursor_pos.0;
+        editor.cursor_mut().col = final_cursor_pos.1;
         
         TextOperations::clamp_cursor_to_buffer(editor);
         
-        editor.modified = true;
+        editor.set_modified(true);
         editor.update_scroll();
     }
     
     /// Execute yank line command (yy)
     pub fn execute_yank_line(editor: &mut Editor, count: usize) {
-        let start_row = editor.cursor.row;
+        let start_row = editor.cursor().row;
         let mut yanked_lines = Vec::new();
         
         for i in 0..count {
             let row = start_row + i;
-            if row < editor.buffer.line_count() {
-                if let Some(line) = editor.buffer.get_line(row) {
+            if row < editor.buffer().line_count() {
+                if let Some(line) = editor.buffer().get_line(row) {
                     yanked_lines.push(line.clone());
                 }
             }
@@ -918,7 +918,7 @@ impl OperatorExecutor {
     
     /// Execute yank with motion command (yw, y$, etc.)
     pub fn execute_yank_motion(editor: &mut Editor, motion: MovementCommand, count: usize) {
-        let start_pos = (editor.cursor.row, editor.cursor.col);
+        let start_pos = (editor.cursor().row, editor.cursor().col);
         let end_pos = motion.calculate_end_position(editor, start_pos, count);
         
         // Extract text from the range
@@ -961,36 +961,39 @@ impl OperatorExecutor {
             return;
         }
         
-        let paste_pos = if editor.register.is_line_based {
-            crate::buffer::Position::new(editor.cursor.row + 1, 0)
+        let is_line_based = editor.register.is_line_based;
+        let content = editor.register.content.clone();
+        
+        let paste_pos = if is_line_based {
+            crate::buffer::Position::new(editor.cursor().row + 1, 0)
         } else {
-            crate::buffer::Position::new(editor.cursor.row, editor.cursor.col + 1)
+            crate::buffer::Position::new(editor.cursor().row, editor.cursor().col + 1)
         };
         
-        if editor.register.is_line_based {
+        if is_line_based {
             // Insert lines after current line
-            let lines: Vec<&str> = editor.register.content.trim_end_matches('\n').split('\n').collect();
+            let lines: Vec<&str> = content.trim_end_matches('\n').split('\n').collect();
             
             // Record the line-based paste for undo
-            let action = crate::history::EditAction::insert_text(paste_pos, editor.register.content.clone());
-            editor.history.push(action);
+            let action = crate::history::EditAction::insert_text(paste_pos, content.clone());
+            editor.history_mut().push(action);
             
             for (i, line) in lines.iter().enumerate() {
-                let insert_row = editor.cursor.row + 1 + i;
-                editor.buffer.insert_line(insert_row, line.to_string());
+                let insert_row = editor.cursor().row + 1 + i;
+                editor.buffer_mut().insert_line(insert_row, line.to_string());
             }
             
             // Move cursor to the start of the first inserted line
             if lines.len() > 0 {
-                editor.cursor.row += 1;
-                editor.cursor.col = 0;
+                editor.cursor_mut().row += 1;
+                editor.cursor_mut().col = 0;
                 
                 // Move to first non-blank character
-                let line_len = editor.buffer.line_length(editor.cursor.row);
+                let line_len = editor.buffer().line_length(editor.cursor().row);
                 for col in 0..line_len {
-                    if let Some(ch) = editor.buffer.get_char((editor.cursor.row, col)) {
+                    if let Some(ch) = editor.buffer().get_char((editor.cursor().row, col)) {
                         if !ch.is_whitespace() {
-                            editor.cursor.col = col;
+                            editor.cursor_mut().col = col;
                             break;
                         }
                     }
@@ -998,30 +1001,30 @@ impl OperatorExecutor {
             }
         } else {
             // Insert text after cursor position
-            let chars: Vec<char> = editor.register.content.chars().collect();
-            let mut insert_col = editor.cursor.col + 1;
+            let chars: Vec<char> = content.chars().collect();
+            let mut insert_col = editor.cursor().col + 1;
             
             // Clamp insert position to line length
-            let line_len = editor.buffer.line_length(editor.cursor.row);
+            let line_len = editor.buffer().line_length(editor.cursor().row);
             if insert_col > line_len {
                 insert_col = line_len;
             }
             
             // Record the text paste for undo
-            let final_pos = crate::buffer::Position::new(editor.cursor.row, insert_col);
-            let action = crate::history::EditAction::insert_text(final_pos, editor.register.content.clone());
-            editor.history.push(action);
+            let final_pos = crate::buffer::Position::new(editor.cursor().row, insert_col);
+            let action = crate::history::EditAction::insert_text(final_pos, content);
+            editor.history_mut().push(action);
             
             for (i, ch) in chars.iter().enumerate() {
-                let pos = crate::buffer::Position::new(editor.cursor.row, insert_col + i);
-                editor.buffer.insert_char(pos, *ch);
+                let pos = crate::buffer::Position::new(editor.cursor().row, insert_col + i);
+                editor.buffer_mut().insert_char(pos, *ch);
             }
             
             // Move cursor to end of pasted text
-            editor.cursor.col = insert_col + chars.len().saturating_sub(1);
+            editor.cursor_mut().col = insert_col + chars.len().saturating_sub(1);
         }
         
-        editor.modified = true;
+        editor.set_modified(true);
         TextOperations::clamp_cursor_to_buffer(editor);
         editor.update_scroll();
     }
@@ -1033,56 +1036,60 @@ impl OperatorExecutor {
             return;
         }
         
-        let paste_pos = if editor.register.is_line_based {
-            crate::buffer::Position::new(editor.cursor.row, 0)
+        let is_line_based = editor.register.is_line_based;
+        let content = editor.register.content.clone();
+        
+        let paste_pos = if is_line_based {
+            crate::buffer::Position::new(editor.cursor().row, 0)
         } else {
-            crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
+            crate::buffer::Position::new(editor.cursor().row, editor.cursor().col)
         };
         
-        if editor.register.is_line_based {
+        if is_line_based {
             // Insert lines before current line
-            let lines: Vec<&str> = editor.register.content.trim_end_matches('\n').split('\n').collect();
+            let lines: Vec<&str> = content.trim_end_matches('\n').split('\n').collect();
             
             // Record the line-based paste for undo
-            let action = crate::history::EditAction::insert_text(paste_pos, editor.register.content.clone());
-            editor.history.push(action);
+            let action = crate::history::EditAction::insert_text(paste_pos, content.clone());
+            editor.history_mut().push(action);
             
             for (i, line) in lines.iter().enumerate() {
-                let insert_row = editor.cursor.row + i;
-                editor.buffer.insert_line(insert_row, line.to_string());
+                let insert_row = editor.cursor().row + i;
+                editor.buffer_mut().insert_line(insert_row, line.to_string());
             }
             
             // Move cursor to the start of the first inserted line
-            editor.cursor.col = 0;
+            editor.cursor_mut().col = 0;
             
             // Move to first non-blank character
-            let line_len = editor.buffer.line_length(editor.cursor.row);
+            let line_len = editor.buffer().line_length(editor.cursor().row);
             for col in 0..line_len {
-                if let Some(ch) = editor.buffer.get_char((editor.cursor.row, col)) {
+                if let Some(ch) = editor.buffer().get_char((editor.cursor().row, col)) {
                     if !ch.is_whitespace() {
-                        editor.cursor.col = col;
+                        editor.cursor_mut().col = col;
                         break;
                     }
                 }
             }
         } else {
             // Insert text at cursor position
-            let chars: Vec<char> = editor.register.content.chars().collect();
+            let chars: Vec<char> = content.chars().collect();
             
             // Record the text paste for undo
-            let action = crate::history::EditAction::insert_text(paste_pos, editor.register.content.clone());
-            editor.history.push(action);
+            let final_pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
+            let action = crate::history::EditAction::insert_text(final_pos, content);
+            editor.history_mut().push(action);
             
             for (i, ch) in chars.iter().enumerate() {
-                let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col + i);
-                editor.buffer.insert_char(pos, *ch);
+                let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col + i);
+                editor.buffer_mut().insert_char(pos, *ch);
             }
             
             // Move cursor to end of pasted text
-            editor.cursor.col += chars.len().saturating_sub(1);
+            editor.cursor_mut().col += chars.len().saturating_sub(1);
         }
         
-        editor.modified = true;
+        editor.set_modified(true);
         TextOperations::clamp_cursor_to_buffer(editor);
         editor.update_scroll();
     }
@@ -1263,80 +1270,77 @@ impl InsertModeProcessor {
         match key {
             // Regular character insertion
             Key::Char(c) => {
-                editor.buffer.insert_char(
-                    crate::buffer::Position::new(editor.cursor.row, editor.cursor.col), 
-                    *c
-                );
+                let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
+                editor.buffer_mut().insert_char(pos, *c);
                 editor.insert_mode_char(*c);
-                editor.cursor.col += 1;
-                editor.modified = true;
+                editor.cursor_mut().col += 1;
+                editor.set_modified(true);
             }
             
             // Enter key - split line
             Key::Enter => {
-                editor.buffer.insert_newline(
-                    crate::buffer::Position::new(editor.cursor.row, editor.cursor.col)
-                );
+                let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
+                editor.buffer_mut().insert_newline(pos);
                 editor.insert_mode_newline();
-                editor.cursor.row += 1;
-                editor.cursor.col = 0;
-                editor.modified = true;
+                editor.cursor_mut().row += 1;
+                editor.cursor_mut().col = 0;
+                editor.set_modified(true);
                 editor.update_scroll();
             }
             
             // Backspace - delete character to the left
             Key::Backspace => {
-                if editor.cursor.col > 0 {
+                if editor.cursor().col > 0 {
                     // Delete character to the left in current line
-                    editor.cursor.col -= 1;
-                    let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col);
-                    let deleted_char = editor.buffer.delete_char(pos);
+                    editor.cursor_mut().col -= 1;
+                    let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
+                    let deleted_char = editor.buffer_mut().delete_char(pos);
                     editor.insert_mode_backspace(deleted_char, Some(pos));
-                    editor.modified = true;
-                } else if editor.cursor.row > 0 {
+                    editor.set_modified(true);
+                } else if editor.cursor().row > 0 {
                     // At beginning of line - join with previous line
-                    editor.cursor.row -= 1;
-                    editor.cursor.col = editor.buffer.line_length(editor.cursor.row);
+                    editor.cursor_mut().row -= 1;
+                    editor.cursor_mut().col = editor.buffer().line_length(editor.cursor().row);
                     
                     // Delete the newline (which will merge the lines)
-                    let pos = crate::buffer::Position::new(editor.cursor.row, editor.cursor.col);
-                    let deleted_char = editor.buffer.delete_char(pos);
+                    let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
+                    let deleted_char = editor.buffer_mut().delete_char(pos);
                     
                     editor.insert_mode_backspace(deleted_char, Some(pos));
-                    editor.modified = true;
+                    editor.set_modified(true);
                     editor.update_scroll();
                 }
             }
             
             // Arrow keys in insert mode (for navigation without leaving insert)
             Key::Left => {
-                if editor.cursor.col > 0 {
-                    editor.cursor.col -= 1;
+                if editor.cursor().col > 0 {
+                    editor.cursor_mut().col -= 1;
                 }
             }
             Key::Right => {
-                let line_len = editor.buffer.line_length(editor.cursor.row);
+                let line_len = editor.buffer().line_length(editor.cursor().row);
                 // In insert mode, allow cursor to go to line_len (after last character)
-                if editor.cursor.col < line_len {
-                    editor.cursor.col += 1;
+                if editor.cursor().col < line_len {
+                    editor.cursor_mut().col += 1;
                 }
             }
             Key::Up => {
-                if editor.cursor.row > 0 {
-                    editor.cursor.row -= 1;
-                    let line_len = editor.buffer.line_length(editor.cursor.row);
-                    if editor.cursor.col > line_len {
-                        editor.cursor.col = line_len;
+                if editor.cursor().row > 0 {
+                    editor.cursor_mut().row -= 1;
+                    let line_len = editor.buffer().line_length(editor.cursor().row);
+                    if editor.cursor().col > line_len {
+                        editor.cursor_mut().col = line_len;
                     }
                 }
                 editor.update_scroll();
             }
             Key::Down => {
-                if editor.cursor.row + 1 < editor.buffer.line_count() {
-                    editor.cursor.row += 1;
-                    let line_len = editor.buffer.line_length(editor.cursor.row);
-                    if editor.cursor.col > line_len {
-                        editor.cursor.col = line_len;
+                if editor.cursor().row + 1 < editor.buffer().line_count() {
+                    editor.cursor_mut().row += 1;
+                    let line_len = editor.buffer().line_length(editor.cursor().row);
+                    if editor.cursor().col > line_len {
+                        editor.cursor_mut().col = line_len;
                     }
                 }
                 editor.update_scroll();

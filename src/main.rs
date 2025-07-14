@@ -11,17 +11,28 @@ fn main() {
     // Create and run the editor
     let mut editor = Editor::new();
     
-    // Load file if specified
+    // Load files if specified
     if args.len() > 1 {
-        let filename = &args[1];
-        match editor.load_file(filename) {
-            Ok(()) => {
-                println!("Loaded file: {} ({} lines)", filename, editor.buffer.line_count());
+        let filenames = args[1..].to_vec(); // Get all filenames after the program name
+        let results = editor.load_files(&filenames);
+        
+        // Report results
+        for (filename, result) in filenames.iter().zip(results.iter()) {
+            match result {
+                Ok(()) => {
+                    // Get line count for the loaded buffer
+                    if let Some((_, line_count)) = editor.get_buffer_info(filename) {
+                        println!("Loaded file: {} ({} lines)", filename, line_count);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Could not load file '{}': {}", filename, e);
+                }
             }
-            Err(e) => {
-                eprintln!("Warning: Could not load file '{}': {}", filename, e);
-                editor.filename = Some(filename.clone());
-            }
+        }
+        
+        if filenames.len() > 1 {
+            println!("Loaded {} files. Use :bn and :bp to switch between buffers, :ls to list all buffers.", filenames.len());
         }
     }
     

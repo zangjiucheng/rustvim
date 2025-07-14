@@ -35,16 +35,32 @@ impl Cursor {
     }
 }
 
+/// Information about a single buffer
+pub struct BufferInfo {
+    /// The buffer contents
+    pub buffer: Buffer,
+    /// The filename (if any)
+    pub filename: Option<String>,
+    /// Whether the buffer has been modified
+    pub modified: bool,
+    /// Cursor position for this buffer
+    pub cursor: Cursor,
+    /// Scroll offset for this buffer
+    pub scroll_offset: usize,
+    /// Undo/redo history for this buffer
+    pub history: History,
+}
+
 /// Main editor state and controller
 pub struct Editor {
     /// Current editing mode
     pub mode: Mode,
     
-    /// Current cursor position
-    pub cursor: Cursor,
+    /// List of open buffers
+    pub buffers: Vec<BufferInfo>,
     
-    /// Reference to the active text buffer
-    pub buffer: Buffer,
+    /// Index of the currently active buffer
+    pub current_buffer: usize,
     
     /// Terminal interface
     pub terminal: Terminal,
@@ -52,17 +68,8 @@ pub struct Editor {
     /// Whether the editor is running
     pub running: bool,
     
-    /// Whether the buffer has been modified
-    pub modified: bool,
-    
-    /// Current filename (if any)
-    pub filename: Option<String>,
-    
     /// Current status message
     pub status_msg: Option<String>,
-    
-    /// Scroll offset for viewport
-    pub scroll_offset: usize,
     
     /// Pending count for commands (e.g., 5j to move down 5 lines)
     pub pending_count: Option<usize>,
@@ -72,9 +79,6 @@ pub struct Editor {
     
     /// Register to hold yanked/deleted text
     pub register: Register,
-    
-    /// History manager for undo/redo functionality
-    pub history: History,
     
     /// Tracks changes during insert mode for grouping
     pub insert_mode_changes: Option<InsertModeGroup>,
@@ -131,20 +135,26 @@ impl Register {
 impl Editor {
     /// Create a new editor instance
     pub fn new() -> Self {
+        let mut buffers = Vec::new();
+        buffers.push(BufferInfo {
+            buffer: Buffer::new(),
+            filename: None,
+            modified: false,
+            cursor: Cursor::new(),
+            scroll_offset: 0,
+            history: History::new(),
+        });
+        
         Self {
             mode: Mode::Normal,
-            cursor: Cursor::new(),
-            buffer: Buffer::new(),
+            buffers,
+            current_buffer: 0,
             terminal: Terminal::new(),
             running: true,
-            modified: false,
-            filename: None,
             status_msg: None,
-            scroll_offset: 0,
             pending_count: None,
             pending_operator: None,
             register: Register::new(),
-            history: History::new(),
             insert_mode_changes: None,
             search_query: None,
             search_input: String::new(),
@@ -182,8 +192,8 @@ impl Editor {
                             // Exit insert mode, move cursor left if possible
                             self.end_insert_mode();
                             self.mode = Mode::Normal;
-                            if self.cursor.col > 0 {
-                                self.cursor.col -= 1;
+                            if self.cursor().col > 0 {
+                                self.cursor_mut().col -= 1;
                             }
                         }
                         Mode::Search => {
@@ -256,8 +266,8 @@ impl Editor {
         self.draw_status_line()?;
         
         // Position cursor at editor cursor position
-        let screen_row = self.cursor.row.saturating_sub(self.scroll_offset) + 1;
-        let screen_col = self.cursor.col + 1;
+        let screen_row = self.cursor().row.saturating_sub(self.scroll_offset()) + 1;
+        let screen_col = self.cursor().col + 1;
         self.terminal.move_cursor(screen_row, screen_col)?;
         
         // Show cursor
@@ -275,11 +285,11 @@ impl Editor {
         let content_rows = rows.saturating_sub(1);
         
         for screen_row in 0..content_rows {
-            let buffer_row = screen_row + self.scroll_offset;
+            let buffer_row = screen_row + self.scroll_offset();
             
-            if buffer_row < self.buffer.line_count() {
+            if buffer_row < self.buffer().line_count() {
                 // Draw actual buffer line
-                if let Some(line) = self.buffer.get_line(buffer_row) {
+                if let Some(line) = self.buffer().get_line(buffer_row) {
                     // Check if this line has a search match to highlight
                     if let Some((match_row, match_col, match_len)) = self.search_match {
                         if buffer_row == match_row {
@@ -357,13 +367,14 @@ impl Editor {
         }
         
         // Create regular status line content
-        let filename = self.filename.as_deref().unwrap_or("[No Name]");
-        let modified = if self.modified { " [Modified]" } else { "" };
+        let filename = self.filename().as_deref().unwrap_or("[No Name]");
+        let modified = if self.is_modified() { " [Modified]" } else { "" };
+        let buffer_info = format!("({}/{})", self.current_buffer + 1, self.buffers.len());
         let mode = format!("{:?}", self.mode);
-        let position = format!("{}:{}", self.cursor.row + 1, self.cursor.col + 1);
-        let lines = format!("{} lines", self.buffer.line_count());
+        let position = format!("{}:{}", self.cursor().row + 1, self.cursor().col + 1);
+        let lines = format!("{} lines", self.buffer().line_count());
         
-        let left = format!("{}{} - {}", filename, modified, mode);
+        let left = format!("{}{} {} - {}", filename, modified, buffer_info, mode);
         let right = format!("{} - {}", position, lines);
         
         // Calculate spacing
@@ -391,82 +402,83 @@ impl Editor {
         let content_rows = rows.saturating_sub(1); // Reserve space for status line
         
         // Scroll up if cursor is above visible area
-        if self.cursor.row < self.scroll_offset {
-            self.scroll_offset = self.cursor.row;
+        if self.cursor().row < self.scroll_offset() {
+            self.set_scroll_offset(self.cursor().row);
         }
         
         // Scroll down if cursor is below visible area
-        if self.cursor.row >= self.scroll_offset + content_rows {
-            self.scroll_offset = self.cursor.row - content_rows + 1;
+        if self.cursor().row >= self.scroll_offset() + content_rows {
+            self.set_scroll_offset(self.cursor().row - content_rows + 1);
         }
     }
     
     /// Move cursor safely within buffer bounds
     pub fn move_cursor(&mut self, row: usize, col: usize) {
         // Clamp row to buffer bounds
-        self.cursor.row = row.min(self.buffer.line_count().saturating_sub(1));
+        self.cursor_mut().row = row.min(self.buffer().line_count().saturating_sub(1));
         
         // Clamp column to line length
-        let line_len = self.buffer.line_length(self.cursor.row);
-        self.cursor.col = col.min(line_len);
+        let line_len = self.buffer().line_length(self.cursor().row);
+        self.cursor_mut().col = col.min(line_len);
     }
     
     /// Move cursor up one line
     pub fn cursor_up(&mut self) {
-        if self.cursor.row > 0 {
-            let new_row = self.cursor.row - 1;
-            let line_len = self.buffer.line_length(new_row);
-            self.cursor.row = new_row;
+        if self.cursor().row > 0 {
+            let new_row = self.cursor().row - 1;
+            let line_len = self.buffer().line_length(new_row);
+            self.cursor_mut().row = new_row;
             // In normal mode, cursor should not go past the last character
-            self.cursor.col = self.cursor.col.min(line_len.saturating_sub(1));
+            self.cursor_mut().col = self.cursor().col.min(line_len.saturating_sub(1));
         }
     }
     
     /// Move cursor down one line
     pub fn cursor_down(&mut self) {
-        if self.cursor.row + 1 < self.buffer.line_count() {
-            let new_row = self.cursor.row + 1;
-            let line_len = self.buffer.line_length(new_row);
-            self.cursor.row = new_row;
+        if self.cursor().row + 1 < self.buffer().line_count() {
+            let new_row = self.cursor().row + 1;
+            let line_len = self.buffer().line_length(new_row);
+            self.cursor_mut().row = new_row;
             // In normal mode, cursor should not go past the last character
-            self.cursor.col = self.cursor.col.min(line_len.saturating_sub(1));
+            self.cursor_mut().col = self.cursor().col.min(line_len.saturating_sub(1));
         }
     }
     
     /// Move cursor left one position
     pub fn cursor_left(&mut self) {
-        if self.cursor.col > 0 {
-            self.cursor.col -= 1;
+        if self.cursor().col > 0 {
+            self.cursor_mut().col -= 1;
         }
         // For now, don't wrap to previous line (keep it simple for Day 6)
     }
     
     /// Move cursor right one position
     pub fn cursor_right(&mut self) {
-        let line_len = self.buffer.line_length(self.cursor.row);
+        let line_len = self.buffer().line_length(self.cursor().row);
         // In normal mode, don't go past the last character
         let max_col = line_len.saturating_sub(1);
-        if self.cursor.col < max_col {
-            self.cursor.col += 1;
+        if self.cursor().col < max_col {
+            self.cursor_mut().col += 1;
         }
         // For now, don't wrap to next line (keep it simple for Day 6)
     }
     
     /// Get current cursor position as Position
     pub fn cursor_position(&self) -> crate::buffer::Position {
-        crate::buffer::Position::new(self.cursor.row, self.cursor.col)
+        crate::buffer::Position::new(self.cursor().row, self.cursor().col)
     }
     
     
     /// Perform undo operation
     pub fn undo(&mut self) {
-        if let Some((_action, cursor_pos)) = self.history.apply_undo(&mut self.buffer) {
-            self.cursor.row = cursor_pos.row;
-            self.cursor.col = cursor_pos.col;
-            self.modified = true;
+        let current_buffer = &mut self.buffers[self.current_buffer];
+        if let Some((_action, cursor_pos)) = current_buffer.history.apply_undo(&mut current_buffer.buffer) {
+            current_buffer.cursor.row = cursor_pos.row;
+            current_buffer.cursor.col = cursor_pos.col;
+            current_buffer.modified = true;
             
             // Enhanced status message with undo count
-            let remaining = self.history.undo_count();
+            let remaining = current_buffer.history.undo_count();
             if remaining > 0 {
                 self.status_msg = Some(format!("Undone ({} more available)", remaining));
             } else {
@@ -480,13 +492,14 @@ impl Editor {
     
     /// Perform redo operation
     pub fn redo(&mut self) {
-        if let Some((_action, cursor_pos)) = self.history.apply_redo(&mut self.buffer) {
-            self.cursor.row = cursor_pos.row;
-            self.cursor.col = cursor_pos.col;
-            self.modified = true;
+        let current_buffer = &mut self.buffers[self.current_buffer];
+        if let Some((_action, cursor_pos)) = current_buffer.history.apply_redo(&mut current_buffer.buffer) {
+            current_buffer.cursor.row = cursor_pos.row;
+            current_buffer.cursor.col = cursor_pos.col;
+            current_buffer.modified = true;
             
             // Enhanced status message with redo count
-            let remaining = self.history.redo_count();
+            let remaining = current_buffer.history.redo_count();
             if remaining > 0 {
                 self.status_msg = Some(format!("Redone ({} more available)", remaining));
             } else {
@@ -500,7 +513,7 @@ impl Editor {
     
     /// Start tracking insert mode changes
     pub fn start_insert_mode(&mut self) {
-        let start_pos = crate::buffer::Position::new(self.cursor.row, self.cursor.col);
+        let start_pos = crate::buffer::Position::new(self.cursor().row, self.cursor().col);
         self.insert_mode_changes = Some(InsertModeGroup::new(start_pos));
     }
     
@@ -513,7 +526,7 @@ impl Editor {
                     changes.start_pos,
                     changes.inserted_text
                 );
-                self.history.push(action);
+                self.history_mut().push(action);
             }
             
             // Record deletions if any (these happened during insert mode via backspace)
@@ -523,7 +536,7 @@ impl Editor {
                         deletion_pos,
                         changes.deleted_text
                     );
-                    self.history.push(action);
+                    self.history_mut().push(action);
                 }
             }
         }
@@ -605,8 +618,8 @@ impl Editor {
         // Save the query for repeat searches
         self.search_query = Some(query.to_string());
         
-        let start_row = self.cursor.row;
-        let start_col = self.cursor.col + 1; // Start after current position
+        let start_row = self.cursor().row;
+        let start_col = self.cursor().col + 1; // Start after current position
         
         self.search_from_position(query, start_row, start_col);
     }
@@ -640,7 +653,7 @@ impl Editor {
             let (start_row, start_col) = if let Some((row, col, length)) = self.search_match {
                 (row, col + length)
             } else {
-                (self.cursor.row, self.cursor.col + 1)
+                (self.cursor().row, self.cursor().col + 1)
             };
             
             self.search_from_position(query, start_row, start_col);
@@ -657,20 +670,20 @@ impl Editor {
                 } else if row > 0 {
                     // Move to end of previous line
                     let prev_row = row - 1;
-                    let prev_line_len = self.buffer.get_line(prev_row)
+                    let prev_line_len = self.buffer().get_line(prev_row)
                         .map(|line| line.len())
                         .unwrap_or(0);
                     (prev_row, prev_line_len)
                 } else {
                     // At beginning of buffer, search from end
-                    let last_row = self.buffer.line_count().saturating_sub(1);
-                    let last_col = self.buffer.get_line(last_row)
+                    let last_row = self.buffer().line_count().saturating_sub(1);
+                    let last_col = self.buffer().get_line(last_row)
                         .map(|line| line.len())
                         .unwrap_or(0);
                     (last_row, last_col)
                 }
             } else {
-                (self.cursor.row, self.cursor.col)
+                (self.cursor().row, self.cursor().col)
             };
             
             self.search_backward_from_position(query, start_row, start_col);
@@ -686,7 +699,7 @@ impl Editor {
         // Save the query for repeat searches
         self.search_query = Some(query.to_string());
         
-        self.search_backward_from_position(query, self.cursor.row, self.cursor.col);
+        self.search_backward_from_position(query, self.cursor().row, self.cursor().col);
     }
     
     /// Search backward from a specific position
@@ -695,7 +708,7 @@ impl Editor {
         let mut last_match: Option<(usize, usize)> = None;
         
         for row in 0..=start_row {
-            if let Some(line) = self.buffer.get_line(row) {
+            if let Some(line) = self.buffer().get_line(row) {
                 let search_limit = if row == start_row {
                     start_col.min(line.len())
                 } else {
@@ -739,8 +752,8 @@ impl Editor {
         let mut last_match_wrapped: Option<(usize, usize)> = None;
         
         // Search the entire buffer from the end to find the last occurrence
-        for row in 0..self.buffer.line_count() {
-            if let Some(line) = self.buffer.get_line(row) {
+        for row in 0..self.buffer().line_count() {
+            if let Some(line) = self.buffer().get_line(row) {
                 let mut start = 0;
                 
                 // Find all occurrences in this line and keep the last one
@@ -749,7 +762,7 @@ impl Editor {
                     
                     // Only consider matches that are after our current position (for wrap-around)
                     // or if we're not on the same row
-                    if row > self.cursor.row || (row == self.cursor.row && actual_pos > self.cursor.col) {
+                    if row > self.cursor().row || (row == self.cursor().row && actual_pos > self.cursor().col) {
                         last_match_wrapped = Some((row, actual_pos));
                     }
                     
@@ -760,8 +773,8 @@ impl Editor {
         
         // If no match found after cursor, find the very last match in the entire buffer
         if last_match_wrapped.is_none() {
-            for row in 0..self.buffer.line_count() {
-                if let Some(line) = self.buffer.get_line(row) {
+            for row in 0..self.buffer().line_count() {
+                if let Some(line) = self.buffer().get_line(row) {
                     let mut start = 0;
                     
                     while let Some(pos) = line[start..].find(query) {
@@ -784,8 +797,8 @@ impl Editor {
     
     /// Find text starting from a specific position
     fn find_text_from_position(&self, query: &str, start_row: usize, start_col: usize) -> Option<(usize, usize)> {
-        for row in start_row..self.buffer.line_count() {
-            if let Some(line) = self.buffer.get_line(row) {
+        for row in start_row..self.buffer().line_count() {
+            if let Some(line) = self.buffer().get_line(row) {
                 let search_start = if row == start_row { start_col } else { 0 };
                 
                 if search_start < line.len() {
@@ -801,8 +814,8 @@ impl Editor {
     
     /// Move cursor to search match and set up highlighting
     fn move_cursor_to_match(&mut self, row: usize, col: usize, length: usize) {
-        self.cursor.row = row;
-        self.cursor.col = col;
+        self.cursor_mut().row = row;
+        self.cursor_mut().col = col;
         self.search_match = Some((row, col, length));
         self.update_scroll();
     }
@@ -870,32 +883,276 @@ impl Editor {
                 }
             }
             "q" => {
-                // :q - quit
-                self.quit_editor(false);
+                // :q - quit current buffer
+                self.close_buffer(false);
             }
             "q!" => {
-                // :q! - force quit (discard changes)
-                self.quit_editor(true);
+                // :q! - force quit current buffer (discard changes)
+                self.close_buffer(true);
+            }
+            "qa" => {
+                // :qa - quit all buffers (check for modifications)
+                self.quit_all_editor(false);
+            }
+            "qa!" => {
+                // :qa! - force quit all buffers (discard all changes)
+                self.quit_all_editor(true);
+            }
+            "wa" => {
+                // :wa - write all modified buffers
+                self.write_all_buffers();
+            }
+            "wqa" | "xa" => {
+                // :wqa or :xa - write all and quit
+                if self.write_all_buffers() {
+                    self.quit_all_editor(true); // Force quit after successful write
+                }
             }
             "wq" | "x" => {
                 // :wq or :x - write and quit
                 if self.write_file(None) {
-                    self.quit_editor(true); // Force quit after successful write
+                    self.close_buffer(true); // Force close after successful write
                 }
             }
             "e" => {
                 if parts.len() > 1 {
-                    // :e filename - edit new file
+                    // :e filename - edit new file in a new buffer
                     let filename = parts[1..].join(" ");
-                    self.edit_file(&filename);
+                    
+                    // Create a new buffer for the file
+                    match std::fs::read_to_string(&filename) {
+                        Ok(content) => {
+                            // File exists, load its content
+                            let buffer_info = BufferInfo {
+                                buffer: Buffer::from_file(&content),
+                                filename: Some(filename.clone()),
+                                modified: false,
+                                cursor: Cursor::new(),
+                                scroll_offset: 0,
+                                history: History::new(),
+                            };
+                            
+                            self.add_buffer(buffer_info);
+                            let line_count = self.buffer().line_count();
+                            self.set_status_message(format!("\"{}\" {}L read", filename, line_count));
+                        }
+                        Err(_) => {
+                            // File doesn't exist, create new empty buffer
+                            let buffer_info = BufferInfo {
+                                buffer: Buffer::new(),
+                                filename: Some(filename.clone()),
+                                modified: false,
+                                cursor: Cursor::new(),
+                                scroll_offset: 0,
+                                history: History::new(),
+                            };
+                            
+                            self.add_buffer(buffer_info);
+                            self.set_status_message(format!("\"{}\" [New File]", filename));
+                        }
+                    }
+                } else {
+                    self.set_status_message("E471: Argument required".to_string());
+                }
+            }
+            "bn" | "bnext" => {
+                // :bn - next buffer
+                self.next_buffer();
+                self.set_status_message(format!("Buffer {}", self.current_buffer + 1));
+            }
+            "bp" | "bprev" => {
+                // :bp - previous buffer
+                self.prev_buffer();
+                self.set_status_message(format!("Buffer {}", self.current_buffer + 1));
+            }
+            "ls" | "buffers" => {
+                // :ls - list buffers
+                let buffer_list = self.list_buffers();
+                let message = buffer_list.join(", ");
+                self.set_status_message(message);
+            }
+            "b" => {
+                if parts.len() > 1 {
+                    // :b N - switch to buffer N (1-indexed like Vim)
+                    if let Ok(buffer_num) = parts[1].parse::<usize>() {
+                        if buffer_num > 0 && self.switch_to_buffer(buffer_num - 1) {
+                            self.set_status_message(format!("Buffer {}", buffer_num));
+                        } else {
+                            self.set_status_message(format!("E86: Buffer {} does not exist", buffer_num));
+                        }
+                    } else {
+                        self.set_status_message("E86: Invalid buffer number".to_string());
+                    }
                 } else {
                     self.set_status_message("E471: Argument required".to_string());
                 }
             }
             _ => {
-                self.set_status_message(format!("E492: Not an editor command: {}", command));
+                // Check if it's a buffer number
+                if let Ok(buffer_num) = parts[0].parse::<usize>() {
+                    if buffer_num > 0 && self.switch_to_buffer(buffer_num - 1) {
+                        self.set_status_message(format!("Buffer {}", buffer_num));
+                    } else {
+                        self.set_status_message(format!("E86: Buffer {} does not exist", buffer_num));
+                    }
+                } else {
+                    self.set_status_message(format!("E492: Not an editor command: {}", command));
+                }
             }
         }
+    }
+
+        
+    // Helper methods for buffer management
+    
+    /// Get a reference to the current buffer info
+    pub fn current_buffer(&self) -> &BufferInfo {
+        &self.buffers[self.current_buffer]
+    }
+    
+    /// Get a mutable reference to the current buffer info
+    pub fn current_buffer_mut(&mut self) -> &mut BufferInfo {
+        &mut self.buffers[self.current_buffer]
+    }
+    
+    /// Get the current buffer content
+    pub fn buffer(&self) -> &Buffer {
+        &self.current_buffer().buffer
+    }
+    
+    /// Get a mutable reference to the current buffer content
+    pub fn buffer_mut(&mut self) -> &mut Buffer {
+        &mut self.current_buffer_mut().buffer
+    }
+    
+    /// Get the current cursor
+    pub fn cursor(&self) -> &Cursor {
+        &self.current_buffer().cursor
+    }
+    
+    /// Get a mutable reference to the current cursor
+    pub fn cursor_mut(&mut self) -> &mut Cursor {
+        &mut self.current_buffer_mut().cursor
+    }
+    
+    /// Get the current filename
+    pub fn filename(&self) -> &Option<String> {
+        &self.current_buffer().filename
+    }
+    
+    /// Set the current filename
+    pub fn set_filename(&mut self, filename: Option<String>) {
+        self.current_buffer_mut().filename = filename;
+    }
+
+    /// Get a mutable reference to the current buffer's history
+    pub fn history_mut(&mut self) -> &mut History {
+        &mut self.current_buffer_mut().history
+    }
+    
+    /// Add a new buffer and switch to it
+    pub fn add_buffer(&mut self, buffer_info: BufferInfo) -> usize {
+        self.buffers.push(buffer_info);
+        let new_index = self.buffers.len() - 1;
+        self.current_buffer = new_index;
+        new_index
+    }
+    
+    /// Switch to the next buffer
+    pub fn next_buffer(&mut self) {
+        if self.buffers.len() > 1 {
+            self.current_buffer = (self.current_buffer + 1) % self.buffers.len();
+        }
+    }
+    
+    /// Switch to the previous buffer
+    pub fn prev_buffer(&mut self) {
+        if self.buffers.len() > 1 {
+            self.current_buffer = if self.current_buffer == 0 {
+                self.buffers.len() - 1
+            } else {
+                self.current_buffer - 1
+            };
+        }
+    }
+    
+    /// Switch to buffer by index
+    pub fn switch_to_buffer(&mut self, index: usize) -> bool {
+        if index < self.buffers.len() {
+            self.current_buffer = index;
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// Get list of buffer information for display
+    pub fn list_buffers(&self) -> Vec<String> {
+        self.buffers.iter().enumerate().map(|(i, buf)| {
+            let current = if i == self.current_buffer { "%" } else { " " };
+            let modified = if buf.modified { "+" } else { " " };
+            let filename = buf.filename.as_deref().unwrap_or("[No Name]");
+            format!("{} {}{} {}", i + 1, current, modified, filename)
+        }).collect()
+    }
+    
+    /// Check if the current buffer is modified
+    pub fn is_modified(&self) -> bool {
+        self.current_buffer().modified
+    }
+    
+    /// Set the modified flag for the current buffer
+    pub fn set_modified(&mut self, modified: bool) {
+        self.current_buffer_mut().modified = modified;
+    }
+    
+    /// Get the current scroll offset
+    pub fn scroll_offset(&self) -> usize {
+        self.current_buffer().scroll_offset
+    }
+    
+    /// Set the current scroll offset
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.current_buffer_mut().scroll_offset = offset;
+    }
+    
+    /// Get the current buffer's history
+    pub fn history(&self) -> &History {
+        &self.current_buffer().history
+    }
+    
+    /// Get buffer information for reporting (filename and line count)
+    pub fn get_buffer_info(&self, filename: &str) -> Option<(String, usize)> {
+        self.buffers.iter()
+            .find(|b| b.filename.as_ref().map(|f| f.as_str()) == Some(filename))
+            .map(|b| (filename.to_string(), b.buffer.line_count()))
+    }
+    
+    /// Close the current buffer
+    pub fn close_buffer(&mut self, force: bool) {
+        // Check if current buffer has modifications
+        if !force && self.is_modified() {
+            self.set_status_message("E37: No write since last change (add ! to override)".to_string());
+            return;
+        }
+        
+        // If this is the only buffer, quit the editor
+        if self.buffers.len() == 1 {
+            self.running = false;
+            return;
+        }
+        
+        // Remove the current buffer
+        self.buffers.remove(self.current_buffer);
+        
+        // Adjust current buffer index
+        if self.current_buffer >= self.buffers.len() {
+            self.current_buffer = self.buffers.len() - 1;
+        }
+        
+        // Show status message
+        let remaining = self.buffers.len();
+        self.set_status_message(format!("Buffer closed ({} remaining)", remaining));
     }
 }
 

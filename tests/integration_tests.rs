@@ -121,8 +121,8 @@ pub fn test_editor_operations() -> io::Result<()> {
     // Test editor creation
     let mut editor = Editor::new();
     assert_eq!(editor.mode, Mode::Normal);
-    assert_eq!(editor.cursor.row, 0);
-    assert_eq!(editor.cursor.col, 0);
+    assert_eq!(editor.cursor_mut().row, 0);
+    assert_eq!(editor.cursor_mut().col, 0);
     println!("✓ Editor::new() creates editor in Normal mode at (0,0)");
     
     // Test cursor operations
@@ -422,7 +422,7 @@ pub fn test_commands_functionality() {
     println!("✓ Editor starts in Normal mode");
     
     // Test cursor movement
-    let initial_cursor = (editor.cursor.row, editor.cursor.col);
+    let initial_cursor = (editor.cursor_mut().row, editor.cursor_mut().col);
     assert_eq!(initial_cursor, (0, 0));
     println!("✓ Cursor starts at (0, 0)");
     
@@ -436,15 +436,15 @@ pub fn test_commands_functionality() {
     let mut col = 0;
     for ch in "Hello".chars() {
         // Actually insert into buffer
-        editor.buffer.insert_char(Position::new(0, col), ch);
+        editor.buffer_mut().insert_char(Position::new(0, col), ch);
         // Track the change for undo/redo
         editor.insert_mode_char(ch);
         col += 1;
         // Update cursor position to reflect insertion
-        editor.cursor.col = col;
+        editor.cursor_mut().col = col;
     }
     
-    let line_content = editor.buffer.get_line(0).unwrap();
+    let line_content = editor.buffer_mut().get_line(0).unwrap();
     assert_eq!(line_content, "Hello");
     println!("✓ Insert mode character insertion: '{}'", line_content);
     
@@ -458,16 +458,18 @@ pub fn test_commands_functionality() {
     // Test exiting insert mode
     editor.mode = Mode::Normal; // Manually set mode for testing  
     editor.end_insert_mode(); // End tracking changes
-    editor.modified = true; // Manually set modified flag for testing since we made changes
+    editor.set_modified(true); // Manually set modified flag for testing since we made changes
     assert_eq!(editor.mode, Mode::Normal);
     println!("✓ Successfully exited to Normal mode");
     
     // Test cursor positioning after insert
-    assert!(editor.cursor.col > 0);
-    println!("✓ Cursor positioned correctly after insert: ({}, {})", editor.cursor.row, editor.cursor.col);
+    assert!(editor.cursor().col > 0);
+    let cursor_row = editor.cursor().row;
+    let cursor_col = editor.cursor().col;
+    println!("✓ Cursor positioned correctly after insert: ({}, {})", cursor_row, cursor_col);
     
     // Test buffer modification tracking
-    assert!(editor.modified);
+    assert!(editor.is_modified());
     println!("✓ Buffer modification tracked correctly");
     
     println!("✓ All commands functionality tested successfully");
@@ -521,21 +523,23 @@ pub fn test_buffer_and_cursor() -> io::Result<()> {
     
     // Test editor integration
     let mut editor = Editor::new();
-    assert_eq!(editor.buffer.line_count(), 1);
-    assert_eq!(editor.cursor.row, 0);
-    assert_eq!(editor.cursor.col, 0);
+    assert_eq!(editor.buffer_mut().line_count(), 1);
+    assert_eq!(editor.cursor_mut().row, 0);
+    assert_eq!(editor.cursor_mut().col, 0);
     assert_eq!(editor.mode, Mode::Normal);
-    assert!(!editor.modified);
+    assert!(!editor.is_modified());
     println!("✓ Editor::new() creates proper initial state");
     
     // Test editor buffer operations
-    editor.buffer.insert_char(Position::new(0, 0), 'H');
-    editor.buffer.insert_char(Position::new(0, 1), 'i');
-    editor.modified = true;
+    editor.buffer_mut().insert_char(Position::new(0, 0), 'H');
+    editor.buffer_mut().insert_char(Position::new(0, 1), 'i');
+    editor.set_modified(true);
     
-    assert_eq!(editor.buffer.get_line(0).unwrap(), "Hi");
-    assert!(editor.modified);
-    println!("✓ Editor buffer operations: '{}', modified={}", editor.buffer.get_line(0).unwrap(), editor.modified);
+    assert_eq!(editor.buffer().get_line(0).unwrap(), "Hi");
+    assert!(editor.is_modified());
+    let line_content = editor.buffer().get_line(0).unwrap().clone();
+    let is_modified = editor.is_modified();
+    println!("✓ Editor buffer operations: '{}', modified={}", line_content, is_modified);
     
     println!("✓ All buffer and cursor operations tested successfully");
     Ok(())

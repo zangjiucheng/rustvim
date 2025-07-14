@@ -1,9 +1,14 @@
 #[cfg(test)]
 mod additional_command_tests {
+    use std::fs;
+    use tempfile::tempdir;
     use vimlike_editor::editor::Editor;
 
     #[test]
     fn test_edit_command() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let test_file = temp_dir.path().join("nonexistent.txt");
+        
         let mut editor = Editor::new();
         
         // Test :e command without filename
@@ -12,15 +17,28 @@ mod additional_command_tests {
         assert!(editor.status_msg.as_ref().unwrap().contains("Argument required"));
         
         // Test :e with filename
-        editor.execute_ex_command("e nonexistent.txt");
-        assert_eq!(editor.filename, Some("nonexistent.txt".to_string()));
-        assert!(!editor.modified);
+        let initial_buffer_count = editor.buffers.len();
+        editor.execute_ex_command(&format!("e {}", test_file.to_str().unwrap()));
+        
+        // Should have created a new buffer
+        assert_eq!(editor.buffers.len(), initial_buffer_count + 1);
+        
+        // Should be on the new buffer
+        assert_eq!(editor.current_buffer, initial_buffer_count);
+        assert_eq!(*editor.filename(), Some(test_file.to_str().unwrap().to_string()));
+        assert!(!editor.is_modified());
         assert!(editor.status_msg.is_some());
         assert!(editor.status_msg.as_ref().unwrap().contains("[New File]"));
+        
+        // Cleanup: temp_dir automatically cleans up when dropped
+        drop(temp_dir);
     }
 
     #[test]
     fn test_write_command_variations() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let test_file = temp_dir.path().join("test.txt");
+        
         let mut editor = Editor::new();
         
         // Test writing without filename set
@@ -29,37 +47,67 @@ mod additional_command_tests {
         assert!(editor.status_msg.as_ref().unwrap().contains("No file name"));
         
         // Set filename and test write
-        editor.filename = Some("test.txt".to_string());
-        editor.buffer.insert_line(0, "content".to_string());
-        editor.modified = true;
+        editor.set_filename(Some(test_file.to_str().unwrap().to_string()));
+        editor.buffer_mut().insert_line(0, "content".to_string());
+        editor.set_modified(true);
         
         editor.execute_ex_command("w");
-        assert!(!editor.modified); // Should be marked as saved
+        assert!(!editor.is_modified()); // Should be marked as saved
+        
+        // Verify file was written
+        assert!(test_file.exists());
+        let content = fs::read_to_string(&test_file).expect("Failed to read test file");
+        assert!(content.contains("content"));
+        
+        // Cleanup: temp_dir automatically cleans up when dropped
+        drop(temp_dir);
     }
 
     #[test]
     fn test_x_command_alias() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let test_file = temp_dir.path().join("test.txt");
+        
         let mut editor = Editor::new();
-        editor.filename = Some("test.txt".to_string());
-        editor.buffer.insert_line(0, "content".to_string());
-        editor.modified = true;
+        editor.set_filename(Some(test_file.to_str().unwrap().to_string()));
+        editor.buffer_mut().insert_line(0, "content".to_string());
+        editor.set_modified(true);
         
         // Test :x command (should write and quit like :wq)
         editor.execute_ex_command("x");
-        assert!(!editor.modified);
+        assert!(!editor.is_modified());
         assert!(!editor.running);
+        
+        // Verify file was written
+        assert!(test_file.exists());
+        let content = fs::read_to_string(&test_file).expect("Failed to read test file");
+        assert!(content.contains("content"));
+        
+        // Cleanup: temp_dir automatically cleans up when dropped
+        drop(temp_dir);
     }
 
     #[test]
     fn test_command_with_multiple_arguments() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let test_file = temp_dir.path().join("my file with spaces.txt");
+        
         let mut editor = Editor::new();
         
         // Test :w with filename containing spaces
-        editor.buffer.insert_line(0, "content".to_string());
-        editor.modified = true;
+        editor.buffer_mut().insert_line(0, "content".to_string());
+        editor.set_modified(true);
         
-        editor.execute_ex_command("w my file with spaces.txt");
-        assert_eq!(editor.filename, Some("my file with spaces.txt".to_string()));
-        assert!(!editor.modified);
+        editor.execute_ex_command(&format!("w {}", test_file.to_str().unwrap()));
+        assert_eq!(*editor.filename(), Some(test_file.to_str().unwrap().to_string()));
+        assert!(!editor.is_modified());
+        
+        // Verify file was written
+        assert!(test_file.exists());
+        let content = fs::read_to_string(&test_file).expect("Failed to read test file");
+        assert!(content.contains("content"));
+        
+        // Cleanup: temp_dir automatically cleans up when dropped
+        drop(temp_dir);
     }
 }
