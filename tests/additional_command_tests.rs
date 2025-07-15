@@ -2,7 +2,7 @@
 mod additional_command_tests {
     use std::fs;
     use tempfile::tempdir;
-    use vimlike_editor::editor::Editor;
+    use rustvim::editor::Editor;
 
     #[test]
     fn test_edit_command() {

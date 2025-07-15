@@ -52,7 +52,7 @@ cargo run filename.txt
 
 # Build and run
 cargo build --release
-./target/release/vimlike_editor [filename]
+./target/release/rustvim [filename]
 ```
 
 ### Basic Operations

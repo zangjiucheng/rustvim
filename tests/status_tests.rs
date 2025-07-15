@@ -2,9 +2,9 @@
 mod status_tests {
     use std::fs;
     use tempfile::tempdir;
-    use vimlike_editor::editor::{Editor, Mode, BufferInfo, Cursor};
-    use vimlike_editor::buffer::Buffer;
-    use vimlike_editor::history::History;
+    use rustvim::editor::{Editor, Mode, BufferInfo, Cursor};
+    use rustvim::buffer::Buffer;
+    use rustvim::history::History;
 
     #[test]
     fn test_status_line_single_buffer() {

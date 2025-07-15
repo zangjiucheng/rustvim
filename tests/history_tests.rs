@@ -16,9 +16,9 @@
 //! Run with `cargo test --test history_tests` to execute the tests.
 
 // Import the actual modules from the main crate
-use vimlike_editor::buffer;
-use vimlike_editor::buffer::{Position};
-use vimlike_editor::history::{History, EditAction};
+use rustvim::buffer;
+use rustvim::buffer::{Position};
+use rustvim::history::{History, EditAction};
 
 #[cfg(test)]
 mod tests {

@@ -80,6 +80,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustvim"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "tempfile",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,14 +98,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "vimlike_editor"
-version = "0.1.0"
-dependencies = [
- "libc",
- "tempfile",
 ]
 
 [[package]]

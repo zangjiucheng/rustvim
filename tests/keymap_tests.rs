@@ -1,9 +1,9 @@
-use vimlike_editor::editor::Mode;
-use vimlike_editor::input::Key;
-use vimlike_editor::keymap::{
+use rustvim::editor::Mode;
+use rustvim::input::Key;
+use rustvim::keymap::{
     Action, KeymapConfig, KeymapConfigBuilder, KeymapProcessor, Keymap, PendingAction
 };
-use vimlike_editor::commands::{MovementCommand, EditCommand, ModeSwitchCommand};
+use rustvim::commands::{MovementCommand, EditCommand, ModeSwitchCommand};
 
 #[cfg(test)]
 mod keymap_tests {

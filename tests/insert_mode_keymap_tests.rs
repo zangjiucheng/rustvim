@@ -1,6 +1,6 @@
-use vimlike_editor::editor::{Editor, Mode};
-use vimlike_editor::input::Key;
-use vimlike_editor::keymap::KeymapProcessor;
+use rustvim::editor::{Editor, Mode};
+use rustvim::input::Key;
+use rustvim::keymap::KeymapProcessor;
 
 /// Test that insert mode uses the keymap system correctly
 #[test]

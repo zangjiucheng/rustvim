@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::tempdir;
-use vimlike_editor::editor::Editor;
+use rustvim::editor::Editor;
 
 #[test]
 fn test_file_newline_preservation() {
@@ -61,8 +61,8 @@ fn test_file_newline_preservation() {
     assert!(editor3.buffer().ends_with_newline);
     
     // Write some content
-    editor3.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(0, 0), 'h');
-    editor3.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(0, 1), 'i');
+    editor3.buffer_mut().insert_char(rustvim::buffer::Position::new(0, 0), 'h');
+    editor3.buffer_mut().insert_char(rustvim::buffer::Position::new(0, 1), 'i');
     editor3.set_modified(true);
     
     assert!(editor3.write_file(None));

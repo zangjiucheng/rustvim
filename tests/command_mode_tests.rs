@@ -2,8 +2,8 @@
 mod command_mode_tests {
     use std::fs;
     use tempfile::tempdir;
-    use vimlike_editor::editor::{Editor, Mode};
-    use vimlike_editor::input::Key;
+    use rustvim::editor::{Editor, Mode};
+    use rustvim::input::Key;
 
     #[test]
     fn test_start_command_mode() {
@@ -177,9 +177,9 @@ mod command_mode_tests {
         let mut editor = Editor::new();
         
         // Create multiple buffers
-        use vimlike_editor::editor::{BufferInfo, Cursor};
-        use vimlike_editor::buffer::Buffer;
-        use vimlike_editor::history::History;
+        use rustvim::editor::{BufferInfo, Cursor};
+        use rustvim::buffer::Buffer;
+        use rustvim::history::History;
         
         // Add buffer 2
         let buffer_info1 = BufferInfo {
@@ -249,9 +249,9 @@ mod command_mode_tests {
         let mut editor = Editor::new();
         
         // Create multiple buffers with modifications
-        use vimlike_editor::editor::{BufferInfo, Cursor};
-        use vimlike_editor::buffer::Buffer;
-        use vimlike_editor::history::History;
+        use rustvim::editor::{BufferInfo, Cursor};
+        use rustvim::buffer::Buffer;
+        use rustvim::history::History;
         
         // Modify first buffer (default buffer)
         editor.set_filename(Some(file1.to_str().unwrap().to_string()));
@@ -308,9 +308,9 @@ mod command_mode_tests {
         let mut editor = Editor::new();
         
         // Create multiple buffers
-        use vimlike_editor::editor::{BufferInfo, Cursor};
-        use vimlike_editor::buffer::Buffer;
-        use vimlike_editor::history::History;
+        use rustvim::editor::{BufferInfo, Cursor};
+        use rustvim::buffer::Buffer;
+        use rustvim::history::History;
         
         // Add second buffer
         let buffer_info1 = BufferInfo {
@@ -354,9 +354,9 @@ mod command_mode_tests {
         let mut editor = Editor::new();
         
         // Create multiple buffers with modifications
-        use vimlike_editor::editor::{BufferInfo, Cursor};
-        use vimlike_editor::buffer::Buffer;
-        use vimlike_editor::history::History;
+        use rustvim::editor::{BufferInfo, Cursor};
+        use rustvim::buffer::Buffer;
+        use rustvim::history::History;
         
         // Modify first buffer
         editor.set_filename(Some(file1.to_str().unwrap().to_string()));
@@ -399,9 +399,9 @@ mod command_mode_tests {
         let mut editor = Editor::new();
         
         // Create multiple buffers
-        use vimlike_editor::editor::{BufferInfo, Cursor};
-        use vimlike_editor::buffer::Buffer;
-        use vimlike_editor::history::History;
+        use rustvim::editor::{BufferInfo, Cursor};
+        use rustvim::buffer::Buffer;
+        use rustvim::history::History;
         
         // Add second buffer
         let buffer_info1 = BufferInfo {

@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::tempdir;
-use vimlike_editor::editor::Editor;
+use rustvim::editor::Editor;
 
 #[test]
 fn test_edit_command_creates_multiple_buffers() {
@@ -74,7 +74,7 @@ fn test_edit_command_preserves_existing_buffer_modifications() {
     
     // Edit first file and modify it
     editor.execute_ex_command(&format!("e {}", file1.to_str().unwrap()));
-    editor.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(0, 16), '!');
+    editor.buffer_mut().insert_char(rustvim::buffer::Position::new(0, 16), '!');
     editor.set_modified(true);
     
     assert_eq!(editor.buffer().get_line(0).unwrap(), "Original content!");

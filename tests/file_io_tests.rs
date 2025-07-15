@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::tempdir;
-use vimlike_editor::editor::Editor;
+use rustvim::editor::Editor;
 
 #[test]
 fn test_newline_preservation_in_new_files() {
@@ -18,8 +18,8 @@ fn test_newline_preservation_in_new_files() {
     assert!(editor.buffer().ends_with_newline);
     
     // Add content
-    editor.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(0, 0), 'h');
-    editor.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(0, 1), 'i');
+    editor.buffer_mut().insert_char(rustvim::buffer::Position::new(0, 0), 'h');
+    editor.buffer_mut().insert_char(rustvim::buffer::Position::new(0, 1), 'i');
     editor.set_modified(true);
     
     // Verify content after editing
@@ -55,7 +55,7 @@ fn test_newline_preservation_detailed_workflow() {
     assert!(editor.buffer_mut().ends_with_newline);
     
     // Modify content
-    editor.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(1, 5), '!');
+    editor.buffer_mut().insert_char(rustvim::buffer::Position::new(1, 5), '!');
     editor.set_modified(true);
     
     // Save and verify newline is preserved
@@ -78,7 +78,7 @@ fn test_newline_preservation_detailed_workflow() {
     assert!(!editor2.buffer_mut().ends_with_newline);
     
     // Modify content
-    editor2.buffer_mut().insert_char(vimlike_editor::buffer::Position::new(0, 10), '!');
+    editor2.buffer_mut().insert_char(rustvim::buffer::Position::new(0, 10), '!');
     editor2.set_modified(true);
     
     // Save and verify no newline is added

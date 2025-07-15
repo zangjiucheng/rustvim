@@ -1,7 +1,7 @@
-use vimlike_editor::editor::{Editor, Mode};
-use vimlike_editor::buffer::Buffer;
-use vimlike_editor::input::Key;
-use vimlike_editor::keymap::KeymapProcessor;
+use rustvim::editor::{Editor, Mode};
+use rustvim::buffer::Buffer;
+use rustvim::input::Key;
+use rustvim::keymap::KeymapProcessor;
 
 #[test]
 fn test_search_functionality() {

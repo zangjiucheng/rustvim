@@ -1,5 +1,5 @@
 [package]
-name = "vimlike_editor"
+name = "rustvim"
 version = "0.1.0"
 edition = "2021"
 

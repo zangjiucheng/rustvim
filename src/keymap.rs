@@ -16,9 +16,9 @@
 //! # Examples
 //! 
 //! ```rust
-//! use vimlike_editor::keymap::*;
-//! use vimlike_editor::editor::Mode;
-//! use vimlike_editor::input::Key;
+//! use rustvim::keymap::*;
+//! use rustvim::editor::Mode;
+//! use rustvim::input::Key;
 //! 
 //! // Create with defaults
 //! let processor = KeymapProcessor::new();

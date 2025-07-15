@@ -88,7 +88,7 @@ For detailed implementation and technical details, see:
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd vimlike_editor
+cd rustvim
 
 # Build the project
 cargo build

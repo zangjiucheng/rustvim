@@ -1,4 +1,4 @@
-use vimlike_editor::buffer::{Buffer, Position};
+use rustvim::buffer::{Buffer, Position};
 
 #[test]
 fn test_buffer_creation() {

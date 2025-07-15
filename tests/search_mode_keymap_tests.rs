@@ -1,6 +1,6 @@
-use vimlike_editor::editor::{Editor, Mode};
-use vimlike_editor::input::Key;
-use vimlike_editor::keymap::{KeymapProcessor, Action, Keymap};
+use rustvim::editor::{Editor, Mode};
+use rustvim::input::Key;
+use rustvim::keymap::{KeymapProcessor, Action, Keymap};
 
 #[test]
 fn test_search_mode_keymap_default() {
@@ -86,7 +86,7 @@ fn test_search_mode_execute_with_content() {
     let mut processor = KeymapProcessor::new();
     
     // Replace buffer with content to search in
-    use vimlike_editor::buffer::Buffer;
+    use rustvim::buffer::Buffer;
     *editor.buffer_mut() = Buffer::from_file("hello world\ntest line\nmore content");
     
     editor.mode = Mode::Search;
@@ -163,7 +163,7 @@ fn test_search_mode_backspace_on_empty() {
 
 #[test]
 fn test_search_mode_integration_with_global_config() {
-    use vimlike_editor::keymap::KeymapConfigBuilder;
+    use rustvim::keymap::KeymapConfigBuilder;
     
     let mut editor = Editor::new();
     
@@ -193,7 +193,7 @@ fn test_search_navigation_next() {
     let mut processor = KeymapProcessor::new();
     
     // Add content with multiple occurrences
-    use vimlike_editor::buffer::Buffer;
+    use rustvim::buffer::Buffer;
     *editor.buffer_mut() = Buffer::from_file("test line\ntest again\nmore test content");
     
     // Set up an existing search query
@@ -214,7 +214,7 @@ fn test_search_navigation_previous() {
     let mut processor = KeymapProcessor::new();
     
     // Add content with multiple occurrences
-    use vimlike_editor::buffer::Buffer;
+    use rustvim::buffer::Buffer;
     *editor.buffer_mut() = Buffer::from_file("test line\ntest again\nmore test content");
     
     // Set up an existing search query and position cursor at end
@@ -253,7 +253,7 @@ fn test_search_full_workflow() {
     let mut processor = KeymapProcessor::new();
     
     // Add content with multiple test occurrences
-    use vimlike_editor::buffer::Buffer;
+    use rustvim::buffer::Buffer;
     *editor.buffer_mut() = Buffer::from_file("first test\nsecond test\nthird test");
     
     // 1. Start search mode

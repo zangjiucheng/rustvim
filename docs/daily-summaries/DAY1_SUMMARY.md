@@ -3,9 +3,9 @@
 ## ✅ All Day 1 Tasks Completed Successfully
 
 ### 1. Initialize Repository ✅
-- Created new Rust binary project: `vimlike_editor`
+- Created new Rust binary project: `rustvim`
 - Set up Git version control
-- Project structure established in `/Users/jiucheng/Dev/rust-vim/vimlike_editor/`
+- Project structure established in `/Users/jiucheng/Dev/rustvim/rustvim/`
 
 ### 2. Basic main.rs ✅
 - Implemented greeting message and usage instructions

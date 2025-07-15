@@ -5,10 +5,10 @@
 use std::io;
 
 // Import the actual modules from the main crate
-use vimlike_editor::buffer::{Buffer, Position};
-use vimlike_editor::editor::{Editor, Mode, Cursor};
-use vimlike_editor::input::Key;
-use vimlike_editor::terminal::Terminal;
+use rustvim::buffer::{Buffer, Position};
+use rustvim::editor::{Editor, Mode, Cursor};
+use rustvim::input::Key;
+use rustvim::terminal::Terminal;
 
 /// Integration tests for terminal, buffer, input handling, and editor functionality
 /// These provide comprehensive testing of the editor's core components without

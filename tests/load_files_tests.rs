@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::tempdir;
-use vimlike_editor::editor::Editor;
+use rustvim::editor::Editor;
 
 #[test]
 fn test_load_multiple_files() {

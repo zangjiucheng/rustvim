@@ -1,4 +1,4 @@
-use vimlike_editor::editor::Editor;
+use rustvim::editor::Editor;
 
 fn main() {
     println!("VimLike Editor v0.1.0");

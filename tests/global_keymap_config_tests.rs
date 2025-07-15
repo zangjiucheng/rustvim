@@ -1,7 +1,7 @@
-use vimlike_editor::editor::{Editor, Mode};
-use vimlike_editor::input::Key;
-use vimlike_editor::keymap::{Action, KeymapConfigBuilder, Keymap};
-use vimlike_editor::commands::{MovementCommand, EditCommand};
+use rustvim::editor::{Editor, Mode};
+use rustvim::input::Key;
+use rustvim::keymap::{Action, KeymapConfigBuilder, Keymap};
+use rustvim::commands::{MovementCommand, EditCommand};
 
 #[cfg(test)]
 mod global_keymap_config_tests {
@@ -154,7 +154,7 @@ mod global_keymap_config_tests {
     #[test]
     fn test_default_keymap_functionality() {
         // Test that default_normal_keymap and default_insert_keymap are used
-        let processor = vimlike_editor::keymap::KeymapProcessor::new();
+        let processor = rustvim::keymap::KeymapProcessor::new();
         let keymap = processor.keymap();
         
         // Normal mode should have comprehensive bindings
