@@ -1,10 +1,12 @@
 use vimlike_editor::editor::{Editor, Mode};
 use vimlike_editor::buffer::Buffer;
 use vimlike_editor::input::Key;
+use vimlike_editor::keymap::KeymapProcessor;
 
 #[test]
 fn test_search_functionality() {
     let mut editor = Editor::new();
+    let mut processor = KeymapProcessor::new();
     
     // Load some test content
     *editor.buffer_mut() = Buffer::new();
@@ -12,16 +14,32 @@ fn test_search_functionality() {
     editor.buffer_mut().insert_line(1, "Second line".to_string());
     editor.buffer_mut().insert_line(2, "Third line with hello again".to_string());
     
-    // Test forward search
-    editor.search_forward("hello");
+    // Test search using keymap system
+    // 1. Start search mode
+    let result = processor.process_key(&mut editor, &Key::Char('/'));
+    assert!(result.is_ok());
+    assert_eq!(editor.mode, Mode::Search);
+    
+    // 2. Type search query
+    for ch in "hello".chars() {
+        let result = processor.process_key(&mut editor, &Key::Char(ch));
+        assert!(result.is_ok());
+    }
+    assert_eq!(editor.search_input, "hello");
+    
+    // 3. Execute search
+    let result = processor.process_key(&mut editor, &Key::Enter);
+    assert!(result.is_ok());
+    assert_eq!(editor.mode, Mode::Normal);
     
     // Should find first occurrence
     assert_eq!(editor.cursor().row, 0);
     assert_eq!(editor.cursor().col, 16);
     assert!(editor.search_match.is_some());
     
-    // Test search next
-    editor.search_next();
+    // Test search next using keymap (n key)
+    let result = processor.process_key(&mut editor, &Key::Char('n'));
+    assert!(result.is_ok());
     
     // Should find second occurrence
     assert_eq!(editor.cursor().row, 2);
@@ -37,32 +55,41 @@ fn test_search_functionality() {
 #[test]
 fn test_search_mode_input() {
     let mut editor = Editor::new();
+    let mut processor = KeymapProcessor::new();
     
-    // Start search mode
-    editor.start_search();
+    // Start search mode using keymap processor
+    assert_eq!(editor.mode, Mode::Normal);
+    let result = processor.process_key(&mut editor, &Key::Char('/'));
+    assert!(result.is_ok());
     assert_eq!(editor.mode, Mode::Search);
     assert!(editor.search_input.is_empty());
     
-    // Test typing search query
-    editor.handle_search_mode_input(&Key::Char('h'));
-    editor.handle_search_mode_input(&Key::Char('e'));
-    editor.handle_search_mode_input(&Key::Char('l'));
-    editor.handle_search_mode_input(&Key::Char('l'));
-    editor.handle_search_mode_input(&Key::Char('o'));
+    // Test typing search query using keymap processor
+    let result = processor.process_key(&mut editor, &Key::Char('h'));
+    assert!(result.is_ok());
+    let result = processor.process_key(&mut editor, &Key::Char('e'));
+    assert!(result.is_ok());
+    let result = processor.process_key(&mut editor, &Key::Char('l'));
+    assert!(result.is_ok());
+    let result = processor.process_key(&mut editor, &Key::Char('l'));
+    assert!(result.is_ok());
+    let result = processor.process_key(&mut editor, &Key::Char('o'));
+    assert!(result.is_ok());
     
     assert_eq!(editor.search_input, "hello");
     
-    // Test backspace
-    editor.handle_search_mode_input(&Key::Backspace);
+    // Test backspace using keymap processor
+    let result = processor.process_key(&mut editor, &Key::Backspace);
+    assert!(result.is_ok());
     assert_eq!(editor.search_input, "hell");
     
-    // Test escape (cancel search) - now handled globally
-    editor.mode = Mode::Normal;
-    editor.search_input.clear();
-    editor.search_match = None;
+    // Test escape (cancel search) using keymap processor
+    let result = processor.process_key(&mut editor, &Key::Esc);
+    assert!(result.is_ok());
     
     assert_eq!(editor.mode, Mode::Normal);
     assert!(editor.search_input.is_empty());
+    assert_eq!(editor.search_match, None);
 }
 
 #[test]
@@ -231,4 +258,77 @@ fn test_search_backward_multiple_on_same_line() {
     // Should wrap around to the last "hello"
     assert_eq!(editor.cursor_mut().row, 0);
     assert_eq!(editor.cursor_mut().col, 24);
+}
+
+#[test]
+fn test_search_navigation_keymap() {
+    let mut editor = Editor::new();
+    let mut processor = KeymapProcessor::new();
+    
+    // Load test content with multiple matches
+    *editor.buffer_mut() = Buffer::new();
+    editor.buffer_mut().insert_line(0, "First test line".to_string());
+    editor.buffer_mut().insert_line(1, "Second test here".to_string());
+    editor.buffer_mut().insert_line(2, "Third test content".to_string());
+    editor.buffer_mut().insert_line(3, "Final test result".to_string());
+    
+    // Perform initial search using keymap
+    let result = processor.process_key(&mut editor, &Key::Char('/'));
+    assert!(result.is_ok());
+    
+    // Type "test"
+    for ch in "test".chars() {
+        let result = processor.process_key(&mut editor, &Key::Char(ch));
+        assert!(result.is_ok());
+    }
+    
+    // Execute search
+    let result = processor.process_key(&mut editor, &Key::Enter);
+    assert!(result.is_ok());
+    
+    // Should find first match
+    assert_eq!(editor.cursor().row, 0);
+    assert_eq!(editor.cursor().col, 6);
+    assert!(editor.search_match.is_some());
+    
+    // Test 'n' key for next search
+    let result = processor.process_key(&mut editor, &Key::Char('n'));
+    assert!(result.is_ok());
+    assert_eq!(editor.cursor().row, 1);
+    assert_eq!(editor.cursor().col, 7);
+    
+    // Test another 'n' key
+    let result = processor.process_key(&mut editor, &Key::Char('n'));
+    assert!(result.is_ok());
+    assert_eq!(editor.cursor().row, 2);
+    assert_eq!(editor.cursor().col, 6);
+    
+    // Test 'N' key for previous search
+    let result = processor.process_key(&mut editor, &Key::Char('N'));
+    assert!(result.is_ok());
+    assert_eq!(editor.cursor().row, 1);
+    assert_eq!(editor.cursor().col, 7);
+    
+    // Test 'N' again
+    let result = processor.process_key(&mut editor, &Key::Char('N'));
+    assert!(result.is_ok());
+    assert_eq!(editor.cursor().row, 0);
+    assert_eq!(editor.cursor().col, 6);
+}
+
+#[test]
+fn test_search_navigation_no_query() {
+    let mut editor = Editor::new();
+    let mut processor = KeymapProcessor::new();
+    
+    // Test navigation keys without previous search
+    let result = processor.process_key(&mut editor, &Key::Char('n'));
+    assert!(result.is_ok()); // Should not crash
+    
+    let result = processor.process_key(&mut editor, &Key::Char('N'));
+    assert!(result.is_ok()); // Should not crash
+    
+    // No search match should be set
+    assert!(editor.search_match.is_none());
+    assert!(editor.search_query.is_none());
 }

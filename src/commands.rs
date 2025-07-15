@@ -157,7 +157,22 @@ impl Motion for MovementCommand {
                     temp_col = if line_len > 0 { line_len - 1 } else { 0 };
                     break;
                 }
-                _ => break,
+                MovementCommand::PageUp => {
+                    let content_rows = editor.terminal.rows().saturating_sub(1);
+                    let page_size = content_rows / 2; // Half page like Vim's Ctrl-U
+                    temp_row = temp_row.saturating_sub(page_size);
+                    let line_len = editor.buffer().line_length(temp_row);
+                    temp_col = temp_col.min(line_len.saturating_sub(1));
+                    break;
+                }
+                MovementCommand::PageDown => {
+                    let content_rows = editor.terminal.rows().saturating_sub(1);
+                    let page_size = content_rows / 2; // Half page like Vim's Ctrl-D
+                    temp_row = (temp_row + page_size).min(editor.buffer().line_count().saturating_sub(1));
+                    let line_len = editor.buffer().line_length(temp_row);
+                    temp_col = temp_col.min(line_len.saturating_sub(1));
+                    break;
+                }
             }
         }
         
@@ -180,10 +195,12 @@ pub enum EditCommand {
     DeleteChar,       // x
     DeleteLine,       // dd
     Delete(MovementCommand), // d{motion}
+    DeleteSelection,  // d in visual mode
     
     /// Yank (copy) commands
     YankLine,         // yy
     Yank(MovementCommand), // y{motion}
+    YankSelection,    // y in visual mode
     
     /// Paste commands
     PasteAfter,       // p
@@ -249,6 +266,16 @@ impl Command for EditCommand {
                 editor.search_previous();
                 Ok(())
             }
+            EditCommand::DeleteSelection => {
+                // TODO: Implement for Day 17 (Visual mode)
+                // For now, just return Ok to avoid compilation errors
+                Ok(())
+            }
+            EditCommand::YankSelection => {
+                // TODO: Implement for Day 17 (Visual mode)
+                // For now, just return Ok to avoid compilation errors
+                Ok(())
+            }
         }
     }
 }
@@ -272,6 +299,11 @@ pub enum ModeSwitchCommand {
     /// Search mode
     SearchForward,    // /
     SearchBackward,   // ?
+    
+    /// Visual mode
+    EnterVisual,      // v
+    EnterVisualLine,  // V
+    ExitVisual,       // Esc or mode change
 }
 
 impl Command for ModeSwitchCommand {
@@ -332,6 +364,21 @@ impl Command for ModeSwitchCommand {
                 // In a more complete implementation, this could be a separate mode
                 editor.start_search();
             }
+            ModeSwitchCommand::EnterVisual => {
+                // TODO: Implement for Day 17 (Visual mode)
+                // For now, just return Ok to avoid compilation errors
+                editor.mode = Mode::Normal; // Placeholder
+            }
+            ModeSwitchCommand::EnterVisualLine => {
+                // TODO: Implement for Day 17 (Visual mode)
+                // For now, just return Ok to avoid compilation errors
+                editor.mode = Mode::Normal; // Placeholder
+            }
+            ModeSwitchCommand::ExitVisual => {
+                // TODO: Implement for Day 17 (Visual mode)
+                // For now, just return Ok to avoid compilation errors
+                editor.mode = Mode::Normal; // Placeholder
+            }
         }
         Ok(())
     }
@@ -351,6 +398,219 @@ impl Command for FileCommand {
     fn execute(&self, editor: &mut Editor) -> Result<(), String> {
         // TODO: Implement file operations
         Ok(())
+    }
+}
+
+/// Ex commands (colon commands) for editor operations
+#[derive(Debug, Clone)]
+pub enum ExCommand {
+    /// Write file operations
+    Write { filename: Option<String> },
+    /// Quit operations
+    Quit { force: bool },
+    /// Quit all operations
+    QuitAll { force: bool },
+    /// Write all operations
+    WriteAll,
+    /// Write and quit operations
+    WriteQuit { force: bool },
+    /// Write all and quit operations
+    WriteQuitAll,
+    /// Edit file operations
+    Edit { filename: String },
+    /// Buffer navigation
+    BufferNext,
+    BufferPrev,
+    BufferSwitch { number: usize },
+    BufferList,
+    /// Generic buffer number switch
+    BufferNumber { number: usize },
+    /// Unknown command
+    Unknown { command: String },
+}
+
+impl Command for ExCommand {
+    fn execute(&self, editor: &mut Editor) -> Result<(), String> {
+        match self {
+            ExCommand::Write { filename } => {
+                editor.write_file(filename.clone());
+                Ok(())
+            }
+            ExCommand::Quit { force } => {
+                editor.close_buffer(*force);
+                Ok(())
+            }
+            ExCommand::QuitAll { force } => {
+                editor.quit_all_editor(*force);
+                Ok(())
+            }
+            ExCommand::WriteAll => {
+                editor.write_all_buffers();
+                Ok(())
+            }
+            ExCommand::WriteQuit { force: _ } => {
+                if editor.write_file(None) {
+                    editor.close_buffer(true); // Force close after successful write
+                }
+                Ok(())
+            }
+            ExCommand::WriteQuitAll => {
+                if editor.write_all_buffers() {
+                    editor.quit_all_editor(true); // Force quit after successful write
+                }
+                Ok(())
+            }
+            ExCommand::Edit { filename } => {
+                ExCommandExecutor::execute_edit(editor, filename);
+                Ok(())
+            }
+            ExCommand::BufferNext => {
+                editor.next_buffer();
+                editor.set_status_message(format!("Buffer {}", editor.current_buffer + 1));
+                Ok(())
+            }
+            ExCommand::BufferPrev => {
+                editor.prev_buffer();
+                editor.set_status_message(format!("Buffer {}", editor.current_buffer + 1));
+                Ok(())
+            }
+            ExCommand::BufferSwitch { number } => {
+                if *number > 0 && editor.switch_to_buffer(*number - 1) {
+                    editor.set_status_message(format!("Buffer {}", number));
+                } else {
+                    editor.set_status_message(format!("E86: Buffer {} does not exist", number));
+                }
+                Ok(())
+            }
+            ExCommand::BufferList => {
+                let buffer_list = editor.list_buffers();
+                let message = buffer_list.join(", ");
+                editor.set_status_message(message);
+                Ok(())
+            }
+            ExCommand::BufferNumber { number } => {
+                if *number > 0 && editor.switch_to_buffer(*number - 1) {
+                    editor.set_status_message(format!("Buffer {}", number));
+                } else {
+                    editor.set_status_message(format!("E86: Buffer {} does not exist", number));
+                }
+                Ok(())
+            }
+            ExCommand::Unknown { command } => {
+                editor.set_status_message(format!("E492: Not an editor command: {}", command));
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Parser for Ex commands (colon commands)
+pub struct ExCommandParser;
+
+impl ExCommandParser {
+    /// Parse an Ex command string into an ExCommand enum
+    pub fn parse(command: &str) -> ExCommand {
+        if command.is_empty() {
+            return ExCommand::Unknown { command: command.to_string() };
+        }
+        
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        if parts.is_empty() {
+            return ExCommand::Unknown { command: command.to_string() };
+        }
+        
+        match parts[0] {
+            "w" => {
+                if parts.len() > 1 {
+                    let filename = parts[1..].join(" ");
+                    ExCommand::Write { filename: Some(filename) }
+                } else {
+                    ExCommand::Write { filename: None }
+                }
+            }
+            "q" => ExCommand::Quit { force: false },
+            "q!" => ExCommand::Quit { force: true },
+            "qa" => ExCommand::QuitAll { force: false },
+            "qa!" => ExCommand::QuitAll { force: true },
+            "wa" => ExCommand::WriteAll,
+            "wqa" | "xa" => ExCommand::WriteQuitAll,
+            "wq" | "x" => ExCommand::WriteQuit { force: false },
+            "e" => {
+                if parts.len() > 1 {
+                    let filename = parts[1..].join(" ");
+                    ExCommand::Edit { filename }
+                } else {
+                    ExCommand::Unknown { command: "E471: Argument required".to_string() }
+                }
+            }
+            "bn" | "bnext" => ExCommand::BufferNext,
+            "bp" | "bprev" => ExCommand::BufferPrev,
+            "ls" | "buffers" => ExCommand::BufferList,
+            "b" => {
+                if parts.len() > 1 {
+                    if let Ok(buffer_num) = parts[1].parse::<usize>() {
+                        ExCommand::BufferSwitch { number: buffer_num }
+                    } else {
+                        ExCommand::Unknown { command: "E86: Invalid buffer number".to_string() }
+                    }
+                } else {
+                    ExCommand::Unknown { command: "E471: Argument required".to_string() }
+                }
+            }
+            _ => {
+                // Check if it's a buffer number
+                if let Ok(buffer_num) = parts[0].parse::<usize>() {
+                    ExCommand::BufferNumber { number: buffer_num }
+                } else {
+                    ExCommand::Unknown { command: command.to_string() }
+                }
+            }
+        }
+    }
+}
+
+/// Utility for executing complex Ex commands
+pub struct ExCommandExecutor;
+
+impl ExCommandExecutor {
+    /// Execute edit command with file loading logic
+    pub fn execute_edit(editor: &mut Editor, filename: &str) {
+        use crate::editor::{BufferInfo, Cursor};
+        use crate::buffer::Buffer;
+        use crate::history::History;
+        
+        // Create a new buffer for the file
+        match std::fs::read_to_string(filename) {
+            Ok(content) => {
+                // File exists, load its content
+                let buffer_info = BufferInfo {
+                    buffer: Buffer::from_file(&content),
+                    filename: Some(filename.to_string()),
+                    modified: false,
+                    cursor: Cursor::new(),
+                    scroll_offset: 0,
+                    history: History::new(),
+                };
+                
+                editor.add_buffer(buffer_info);
+                let line_count = editor.buffer().line_count();
+                editor.set_status_message(format!("\"{}\" {}L read", filename, line_count));
+            }
+            Err(_) => {
+                // File doesn't exist, create new empty buffer
+                let buffer_info = BufferInfo {
+                    buffer: Buffer::new(),
+                    filename: Some(filename.to_string()),
+                    modified: false,
+                    cursor: Cursor::new(),
+                    scroll_offset: 0,
+                    history: History::new(),
+                };
+                
+                editor.add_buffer(buffer_info);
+                editor.set_status_message(format!("\"{}\" [New File]", filename));
+            }
+        }
     }
 }
 
@@ -1092,263 +1352,5 @@ impl OperatorExecutor {
         editor.set_modified(true);
         TextOperations::clamp_cursor_to_buffer(editor);
         editor.update_scroll();
-    }
-}
-
-/// Command parser and executor
-pub struct CommandProcessor;
-
-impl CommandProcessor {
-    /// Handle Normal mode key input - moved from editor.rs for better separation of concerns
-    pub fn handle_normal_mode_input(
-        editor: &mut Editor, 
-        key: &crate::input::Key, 
-        input_handler: &mut crate::input::InputHandler
-    ) -> std::io::Result<()> {
-        // Handle digit inputs for count accumulation
-        if let crate::input::Key::Char(c) = key {
-            if c.is_ascii_digit() && (*c != '0' || editor.pending_count.is_some()) {
-                let digit = c.to_digit(10).unwrap() as usize;
-                editor.pending_count = Some(editor.pending_count.unwrap_or(0) * 10 + digit);
-                return Ok(());
-            }
-        }
-        
-        // Check if we have a pending operator (operator-pending mode)
-        if let Some(operator) = &editor.pending_operator {
-            let operator = operator.clone();
-            editor.pending_operator = None;
-            
-            match key {
-                crate::input::Key::Char('d') if matches!(operator, Operator::Delete) => {
-                    let count = editor.pending_count.unwrap_or(1);
-                    OperatorExecutor::execute_delete_line(editor, count);
-                }
-                crate::input::Key::Char('y') if matches!(operator, Operator::Yank) => {
-                    let count = editor.pending_count.unwrap_or(1);
-                    OperatorExecutor::execute_yank_line(editor, count);
-                }
-                crate::input::Key::Char('g') => {
-                    if let Ok(crate::input::Key::Char('g')) = input_handler.read_key() {
-                        match operator {
-                            Operator::Delete => {
-                                let count = editor.pending_count.unwrap_or(1);
-                                OperatorExecutor::execute_delete_motion(editor, MovementCommand::FileStart, count);
-                            }
-                            Operator::Yank => {
-                                let count = editor.pending_count.unwrap_or(1);
-                                OperatorExecutor::execute_yank_motion(editor, MovementCommand::FileStart, count);
-                            }
-                            _ => {} // TODO: Implement other operators
-                        }
-                    }
-                }
-                _ => {
-                    if let Some(NormalCommand::Movement(motion)) = 
-                        Self::parse_normal_command(key, editor.pending_count) {
-                        match operator {
-                            Operator::Delete => {
-                                let count = editor.pending_count.unwrap_or(1);
-                                OperatorExecutor::execute_delete_motion(editor, motion, count);
-                            }
-                            Operator::Yank => {
-                                let count = editor.pending_count.unwrap_or(1);
-                                OperatorExecutor::execute_yank_motion(editor, motion, count);
-                            }
-                            _ => {} // TODO: Implement other operators
-                        }
-                    }
-                }
-            }
-            editor.pending_count = None;
-            return Ok(());
-        }
-        
-        // Handle operator keys
-        match key {
-            crate::input::Key::Char('d') => {
-                editor.pending_operator = Some(Operator::Delete);
-                return Ok(());
-            }
-            crate::input::Key::Char('y') => {
-                editor.pending_operator = Some(Operator::Yank);
-                return Ok(());
-            }
-            _ => {}
-        }
-        
-        // Handle multi-key commands
-        if let Some(command) = Self::parse_multi_key_command(key, input_handler) {
-            if let Err(e) = command.execute(editor) {
-                eprintln!("Command execution failed: {}", e);
-            }
-            editor.pending_count = None;
-            return Ok(());
-        }
-        
-        // Handle single-key commands
-        if let Some(command) = Self::parse_normal_command(key, editor.pending_count) {
-            if let Err(e) = command.execute(editor) {
-                eprintln!("Command execution failed: {}", e);
-            }
-            editor.pending_count = None;
-        }
-        
-        Ok(())
-    }
-
-    /// Parse a key into a command for Normal mode
-    pub fn parse_normal_command(key: &Key, count: Option<usize>) -> Option<NormalCommand> {
-        match key {
-            // Movement commands
-            Key::Char('h') | Key::Left => Some(NormalCommand::Movement(MovementCommand::Left)),
-            Key::Char('j') | Key::Down => Some(NormalCommand::Movement(MovementCommand::Down)),
-            Key::Char('k') | Key::Up => Some(NormalCommand::Movement(MovementCommand::Up)),
-            Key::Char('l') | Key::Right => Some(NormalCommand::Movement(MovementCommand::Right)),
-            
-            Key::Char('w') => Some(NormalCommand::Movement(MovementCommand::WordForward)),
-            Key::Char('b') => Some(NormalCommand::Movement(MovementCommand::WordBackward)),
-            Key::Char('e') => Some(NormalCommand::Movement(MovementCommand::WordEnd)),
-            
-            Key::Char('0') => Some(NormalCommand::Movement(MovementCommand::LineStart)),
-            Key::Char('^') => Some(NormalCommand::Movement(MovementCommand::LineFirstChar)),
-            Key::Char('$') => Some(NormalCommand::Movement(MovementCommand::LineEnd)),
-            
-            Key::Char('G') => Some(NormalCommand::Movement(MovementCommand::FileEnd)),
-            
-            // Edit commands
-            Key::Char('x') => Some(NormalCommand::Edit(EditCommand::DeleteChar)),
-            Key::Char('u') => Some(NormalCommand::Edit(EditCommand::Undo)),
-            Key::Ctrl('r') => Some(NormalCommand::Edit(EditCommand::Redo)),
-            
-            // Search repeat commands
-            Key::Char('n') => Some(NormalCommand::Edit(EditCommand::SearchNext)),
-            Key::Char('N') => Some(NormalCommand::Edit(EditCommand::SearchPrevious)),
-            
-            Key::Char('p') => Some(NormalCommand::Edit(EditCommand::PasteAfter)),
-            Key::Char('P') => Some(NormalCommand::Edit(EditCommand::PasteBefore)),
-            
-            // Mode switch commands
-            Key::Char('i') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::InsertBefore)),
-            Key::Char('a') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::InsertAfter)),
-            Key::Char('A') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::InsertLineEnd)),
-            Key::Char('I') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::InsertLineStart)),
-            
-            Key::Char('o') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::OpenLineBelow)),
-            Key::Char('O') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::OpenLineAbove)),
-            
-            Key::Char(':') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::CommandMode)),
-            Key::Char('/') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::SearchForward)),
-            Key::Char('?') => Some(NormalCommand::ModeSwitch(ModeSwitchCommand::SearchBackward)),
-            
-            _ => None,
-        }
-    }
-    
-    /// Parse special multi-key commands (like 'gg')
-    pub fn parse_multi_key_command(first_key: &Key, input_handler: &mut crate::input::InputHandler) -> Option<NormalCommand> {
-        match first_key {
-            Key::Char('g') => {
-                // Wait for second 'g' to go to top of file
-                if let Ok(Key::Char('g')) = input_handler.read_key() {
-                    Some(NormalCommand::Movement(MovementCommand::FileStart))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-}
-
-/// Insert mode command processor
-pub struct InsertModeProcessor;
-
-impl InsertModeProcessor {
-    /// Handle insert mode input
-    pub fn handle_input(editor: &mut Editor, key: &Key) {
-        match key {
-            // Regular character insertion
-            Key::Char(c) => {
-                let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
-                editor.buffer_mut().insert_char(pos, *c);
-                editor.insert_mode_char(*c);
-                editor.cursor_mut().col += 1;
-                editor.set_modified(true);
-            }
-            
-            // Enter key - split line
-            Key::Enter => {
-                let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
-                editor.buffer_mut().insert_newline(pos);
-                editor.insert_mode_newline();
-                editor.cursor_mut().row += 1;
-                editor.cursor_mut().col = 0;
-                editor.set_modified(true);
-                editor.update_scroll();
-            }
-            
-            // Backspace - delete character to the left
-            Key::Backspace => {
-                if editor.cursor().col > 0 {
-                    // Delete character to the left in current line
-                    editor.cursor_mut().col -= 1;
-                    let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
-                    let deleted_char = editor.buffer_mut().delete_char(pos);
-                    editor.insert_mode_backspace(deleted_char, Some(pos));
-                    editor.set_modified(true);
-                } else if editor.cursor().row > 0 {
-                    // At beginning of line - join with previous line
-                    editor.cursor_mut().row -= 1;
-                    editor.cursor_mut().col = editor.buffer().line_length(editor.cursor().row);
-                    
-                    // Delete the newline (which will merge the lines)
-                    let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
-                    let deleted_char = editor.buffer_mut().delete_char(pos);
-                    
-                    editor.insert_mode_backspace(deleted_char, Some(pos));
-                    editor.set_modified(true);
-                    editor.update_scroll();
-                }
-            }
-            
-            // Arrow keys in insert mode (for navigation without leaving insert)
-            Key::Left => {
-                if editor.cursor().col > 0 {
-                    editor.cursor_mut().col -= 1;
-                }
-            }
-            Key::Right => {
-                let line_len = editor.buffer().line_length(editor.cursor().row);
-                // In insert mode, allow cursor to go to line_len (after last character)
-                if editor.cursor().col < line_len {
-                    editor.cursor_mut().col += 1;
-                }
-            }
-            Key::Up => {
-                if editor.cursor().row > 0 {
-                    editor.cursor_mut().row -= 1;
-                    let line_len = editor.buffer().line_length(editor.cursor().row);
-                    if editor.cursor().col > line_len {
-                        editor.cursor_mut().col = line_len;
-                    }
-                }
-                editor.update_scroll();
-            }
-            Key::Down => {
-                if editor.cursor().row + 1 < editor.buffer().line_count() {
-                    editor.cursor_mut().row += 1;
-                    let line_len = editor.buffer().line_length(editor.cursor().row);
-                    if editor.cursor().col > line_len {
-                        editor.cursor_mut().col = line_len;
-                    }
-                }
-                editor.update_scroll();
-            }
-            
-            _ => {
-                // Unhandled key in insert mode - ignore
-            }
-        }
     }
 }

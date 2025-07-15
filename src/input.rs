@@ -1,7 +1,7 @@
 use std::io::{self, Read};
 
 /// Represents different types of key inputs
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Key {
     /// Regular character input
     Char(char),

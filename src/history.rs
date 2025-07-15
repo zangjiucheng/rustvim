@@ -14,6 +14,13 @@ pub enum EditAction {
         pos: Position,
         text: String,
     },
+    /// A complete insert mode session (may include both insertions and deletions)
+    InsertModeSession {
+        start_pos: Position,
+        inserted_text: String,
+        deleted_text: String,
+        deletion_start_pos: Option<Position>,
+    },
 }
 
 impl EditAction {
@@ -25,6 +32,21 @@ impl EditAction {
     /// Create a delete text action
     pub fn delete_text(pos: Position, text: String) -> Self {
         EditAction::DeleteText { pos, text }
+    }
+    
+    /// Create an insert mode session action
+    pub fn insert_mode_session(
+        start_pos: Position, 
+        inserted_text: String, 
+        deleted_text: String, 
+        deletion_start_pos: Option<Position>
+    ) -> Self {
+        EditAction::InsertModeSession { 
+            start_pos, 
+            inserted_text, 
+            deleted_text, 
+            deletion_start_pos 
+        }
     }
 }
 
@@ -129,6 +151,22 @@ impl History {
                     Self::reinsert_deleted_text(buffer, pos, &text);
                     pos
                 }
+                EditAction::InsertModeSession { start_pos, inserted_text, deleted_text, deletion_start_pos } => {
+                    // Undo the entire insert mode session
+                    // First, delete any text that was inserted during the session
+                    if !inserted_text.is_empty() {
+                        Self::delete_inserted_text(buffer, start_pos, &inserted_text);
+                    }
+                    
+                    // Then, re-insert any text that was deleted during the session
+                    if !deleted_text.is_empty() {
+                        if let Some(del_pos) = deletion_start_pos {
+                            Self::reinsert_deleted_text(buffer, del_pos, &deleted_text);
+                        }
+                    }
+                    
+                    start_pos
+                }
             };
             
             // Push the action to redo stack
@@ -168,6 +206,25 @@ impl History {
                     // Redo deletion
                     Self::delete_text_from_buffer(buffer, pos, &text);
                     pos
+                }
+                EditAction::InsertModeSession { start_pos, inserted_text, deleted_text, deletion_start_pos } => {
+                    // First, delete any text that was inserted
+                    if !inserted_text.is_empty() {
+                        let deletion_pos = crate::buffer::Position::new(
+                            start_pos.row, 
+                            start_pos.col + inserted_text.chars().count()
+                        );
+                        Self::delete_text_from_buffer(buffer, deletion_pos, &inserted_text);
+                    }
+                    
+                    // Then, re-insert any text that was deleted
+                    if !deleted_text.is_empty() {
+                        if let Some(del_pos) = deletion_start_pos {
+                            Self::reinsert_deleted_text(buffer, del_pos, &deleted_text);
+                        }
+                    }
+                    
+                    start_pos
                 }
             };
             

@@ -26,18 +26,18 @@ mod command_mode_tests {
         editor.start_command_mode();
         
         // Type characters
-        editor.handle_command_mode_input(&Key::Char('w'));
+        editor.handle_keymap_input(&Key::Char('w')).unwrap();
         assert_eq!(editor.command_input, "w");
         
-        editor.handle_command_mode_input(&Key::Char(' '));
-        editor.handle_command_mode_input(&Key::Char('t'));
-        editor.handle_command_mode_input(&Key::Char('e'));
-        editor.handle_command_mode_input(&Key::Char('s'));
-        editor.handle_command_mode_input(&Key::Char('t'));
+        editor.handle_keymap_input(&Key::Char(' ')).unwrap();
+        editor.handle_keymap_input(&Key::Char('t')).unwrap();
+        editor.handle_keymap_input(&Key::Char('e')).unwrap();
+        editor.handle_keymap_input(&Key::Char('s')).unwrap();
+        editor.handle_keymap_input(&Key::Char('t')).unwrap();
         assert_eq!(editor.command_input, "w test");
         
         // Test backspace
-        editor.handle_command_mode_input(&Key::Backspace);
+        editor.handle_keymap_input(&Key::Backspace).unwrap();
         assert_eq!(editor.command_input, "w tes");
     }
 
@@ -47,7 +47,7 @@ mod command_mode_tests {
         editor.start_command_mode();
         
         // Type something
-        editor.handle_command_mode_input(&Key::Char('w'));
+        editor.handle_keymap_input(&Key::Char('w')).unwrap();
         assert_eq!(editor.command_input, "w");
         assert_eq!(editor.mode, Mode::Command);
         
@@ -134,12 +134,12 @@ mod command_mode_tests {
         editor.start_command_mode();
         
         // Type a quit command
-        editor.handle_command_mode_input(&Key::Char('q'));
+        editor.handle_keymap_input(&Key::Char('q')).unwrap();
         assert_eq!(editor.mode, Mode::Command);
         assert_eq!(editor.command_input, "q");
         
         // Press Enter to execute
-        editor.handle_command_mode_input(&Key::Enter);
+        editor.handle_keymap_input(&Key::Enter).unwrap();
         assert_eq!(editor.mode, Mode::Normal);
         assert!(editor.command_input.is_empty());
         assert!(!editor.running); // Should have quit

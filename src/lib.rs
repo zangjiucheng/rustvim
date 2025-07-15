@@ -6,5 +6,6 @@ pub mod terminal;
 pub mod input;
 pub mod editor;
 pub mod commands;
+pub mod keymap;
 pub mod history;
 pub mod io;

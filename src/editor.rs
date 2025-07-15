@@ -1,7 +1,8 @@
 use crate::buffer::Buffer;
 use crate::terminal::Terminal;
-use crate::commands::{CommandProcessor, InsertModeProcessor};
+use crate::keymap::KeymapProcessor;
 use crate::history::History;
+use crate::commands::Command;
 
 /// Represents the current mode of the editor
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +95,9 @@ pub struct Editor {
     
     /// Current command input buffer (while typing command)
     pub command_input: String,
+    
+    /// Keymap processor for handling key→action mappings
+    pub keymap_processor: KeymapProcessor,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -160,6 +164,7 @@ impl Editor {
             search_input: String::new(),
             search_match: None,
             command_input: String::new(),
+            keymap_processor: KeymapProcessor::new(),
         }
     }
     
@@ -225,24 +230,8 @@ impl Editor {
                 _ => {}
             }
             
-            // Handle mode-specific commands
-            match self.mode {
-                Mode::Normal => {
-                    CommandProcessor::handle_normal_mode_input(self, &key, &mut input_handler)?;
-                }
-                Mode::Insert => {
-                    InsertModeProcessor::handle_input(self, &key);
-                }
-                Mode::Command => {
-                    self.handle_command_mode_input(&key);
-                }
-                Mode::Visual => {
-                    // TODO: Implement visual mode handling
-                }
-                Mode::Search => {
-                    self.handle_search_mode_input(&key);
-                }
-            }
+            // Handle mode-specific commands using unified keymap processor
+            self.handle_keymap_input(&key)?;
             
             // Refresh screen after each key press
             self.refresh_screen()?;
@@ -520,24 +509,15 @@ impl Editor {
     /// End tracking insert mode changes and record them as a single undo action
     pub fn end_insert_mode(&mut self) {
         if let Some(changes) = self.insert_mode_changes.take() {
-            // Record insertions if any
-            if !changes.inserted_text.is_empty() {
-                let action = crate::history::EditAction::insert_text(
+            if changes.has_changes() {
+                // Create a single composite undo action for the entire insert session
+                let action = crate::history::EditAction::insert_mode_session(
                     changes.start_pos,
-                    changes.inserted_text
+                    changes.inserted_text,
+                    changes.deleted_text,
+                    changes.deletion_start_pos
                 );
                 self.history_mut().push(action);
-            }
-            
-            // Record deletions if any (these happened during insert mode via backspace)
-            if !changes.deleted_text.is_empty() {
-                if let Some(deletion_pos) = changes.deletion_start_pos {
-                    let action = crate::history::EditAction::delete_text(
-                        deletion_pos,
-                        changes.deleted_text
-                    );
-                    self.history_mut().push(action);
-                }
             }
         }
     }
@@ -559,7 +539,7 @@ impl Editor {
     /// Record a character deletion during insert mode (backspace)
     pub fn insert_mode_backspace(&mut self, deleted_char: Option<char>, deletion_pos: Option<crate::buffer::Position>) {
         if let Some(ref mut changes) = self.insert_mode_changes {
-            // Try to remove a character from recently inserted text first
+            // Always try to remove from recently inserted text first
             if !changes.inserted_text.is_empty() {
                 changes.remove_char();
             } else if let (Some(ch), Some(pos)) = (deleted_char, deletion_pos) {
@@ -581,32 +561,6 @@ impl Editor {
         self.mode = Mode::Search;
         self.search_input.clear();
         self.search_match = None; // Clear previous highlighting
-    }
-    
-    /// Handle input in search mode
-    pub fn handle_search_mode_input(&mut self, key: &crate::input::Key) {
-        match key {
-            crate::input::Key::Enter => {
-                // Execute search
-                if !self.search_input.is_empty() {
-                    self.search_query = Some(self.search_input.clone());
-                    self.search_forward(&self.search_input.clone());
-                }
-                self.mode = Mode::Normal;
-                self.search_input.clear();
-            }
-            crate::input::Key::Backspace => {
-                // Remove last character from search query
-                self.search_input.pop();
-            }
-            crate::input::Key::Char(c) => {
-                // Add character to search query
-                self.search_input.push(*c);
-            }
-            _ => {
-                // Ignore other keys in search mode (ESC handled globally)
-            }
-        }
     }
     
     /// Search forward from current cursor position
@@ -836,236 +790,138 @@ impl Editor {
         self.command_input.clear();
     }
     
-    /// Handle input in command mode
-    pub fn handle_command_mode_input(&mut self, key: &crate::input::Key) {
-        match key {
-            crate::input::Key::Enter => {
-                // Execute command
-                let command = self.command_input.trim().to_string();
-                self.execute_ex_command(&command);
-                self.mode = Mode::Normal;
-                self.command_input.clear();
-            }
-            crate::input::Key::Backspace => {
-                // Remove last character from command
-                self.command_input.pop();
-            }
-            crate::input::Key::Char(c) => {
-                // Add character to command
-                self.command_input.push(*c);
-            }
-            _ => {
-                // Ignore other keys in command mode (ESC handled globally)
-            }
-        }
-    }
-    
     /// Execute Ex command (like :w, :q, :wq, etc.)
     pub fn execute_ex_command(&mut self, command: &str) {
-        if command.is_empty() {
-            return;
+        let ex_command = crate::commands::ExCommandParser::parse(command);
+        let _ = ex_command.execute(self);
+    }
+    
+    /// Delete text in a range (for keymap system)
+    pub fn delete_range(&mut self, start_pos: (usize, usize), end_pos: (usize, usize)) -> Result<(), String> {
+        crate::commands::TextOperations::delete_range(self, start_pos, end_pos);
+        Ok(())
+    }
+    
+    /// Yank text in a range (for keymap system)
+    pub fn yank_range(&mut self, start_pos: (usize, usize), end_pos: (usize, usize)) -> Result<(), String> {
+        let yanked_text = crate::commands::TextOperations::extract_range(self, start_pos, end_pos);
+        if !yanked_text.is_empty() {
+            self.register.store_text(yanked_text);
+            self.status_msg = Some("Text yanked".to_string());
         }
-        
-        let parts: Vec<&str> = command.split_whitespace().collect();
-        if parts.is_empty() {
-            return;
-        }
-        
-        match parts[0] {
-            "w" => {
-                if parts.len() > 1 {
-                    // :w filename - save as
-                    let filename = parts[1..].join(" ");
-                    self.write_file(Some(filename));
-                } else {
-                    // :w - save current file
-                    self.write_file(None);
-                }
-            }
-            "q" => {
-                // :q - quit current buffer
-                self.close_buffer(false);
-            }
-            "q!" => {
-                // :q! - force quit current buffer (discard changes)
-                self.close_buffer(true);
-            }
-            "qa" => {
-                // :qa - quit all buffers (check for modifications)
-                self.quit_all_editor(false);
-            }
-            "qa!" => {
-                // :qa! - force quit all buffers (discard all changes)
-                self.quit_all_editor(true);
-            }
-            "wa" => {
-                // :wa - write all modified buffers
-                self.write_all_buffers();
-            }
-            "wqa" | "xa" => {
-                // :wqa or :xa - write all and quit
-                if self.write_all_buffers() {
-                    self.quit_all_editor(true); // Force quit after successful write
-                }
-            }
-            "wq" | "x" => {
-                // :wq or :x - write and quit
-                if self.write_file(None) {
-                    self.close_buffer(true); // Force close after successful write
-                }
-            }
-            "e" => {
-                if parts.len() > 1 {
-                    // :e filename - edit new file in a new buffer
-                    let filename = parts[1..].join(" ");
-                    
-                    // Create a new buffer for the file
-                    match std::fs::read_to_string(&filename) {
-                        Ok(content) => {
-                            // File exists, load its content
-                            let buffer_info = BufferInfo {
-                                buffer: Buffer::from_file(&content),
-                                filename: Some(filename.clone()),
-                                modified: false,
-                                cursor: Cursor::new(),
-                                scroll_offset: 0,
-                                history: History::new(),
-                            };
-                            
-                            self.add_buffer(buffer_info);
-                            let line_count = self.buffer().line_count();
-                            self.set_status_message(format!("\"{}\" {}L read", filename, line_count));
-                        }
-                        Err(_) => {
-                            // File doesn't exist, create new empty buffer
-                            let buffer_info = BufferInfo {
-                                buffer: Buffer::new(),
-                                filename: Some(filename.clone()),
-                                modified: false,
-                                cursor: Cursor::new(),
-                                scroll_offset: 0,
-                                history: History::new(),
-                            };
-                            
-                            self.add_buffer(buffer_info);
-                            self.set_status_message(format!("\"{}\" [New File]", filename));
-                        }
-                    }
-                } else {
-                    self.set_status_message("E471: Argument required".to_string());
-                }
-            }
-            "bn" | "bnext" => {
-                // :bn - next buffer
-                self.next_buffer();
-                self.set_status_message(format!("Buffer {}", self.current_buffer + 1));
-            }
-            "bp" | "bprev" => {
-                // :bp - previous buffer
-                self.prev_buffer();
-                self.set_status_message(format!("Buffer {}", self.current_buffer + 1));
-            }
-            "ls" | "buffers" => {
-                // :ls - list buffers
-                let buffer_list = self.list_buffers();
-                let message = buffer_list.join(", ");
-                self.set_status_message(message);
-            }
-            "b" => {
-                if parts.len() > 1 {
-                    // :b N - switch to buffer N (1-indexed like Vim)
-                    if let Ok(buffer_num) = parts[1].parse::<usize>() {
-                        if buffer_num > 0 && self.switch_to_buffer(buffer_num - 1) {
-                            self.set_status_message(format!("Buffer {}", buffer_num));
-                        } else {
-                            self.set_status_message(format!("E86: Buffer {} does not exist", buffer_num));
-                        }
-                    } else {
-                        self.set_status_message("E86: Invalid buffer number".to_string());
-                    }
-                } else {
-                    self.set_status_message("E471: Argument required".to_string());
-                }
-            }
-            _ => {
-                // Check if it's a buffer number
-                if let Ok(buffer_num) = parts[0].parse::<usize>() {
-                    if buffer_num > 0 && self.switch_to_buffer(buffer_num - 1) {
-                        self.set_status_message(format!("Buffer {}", buffer_num));
-                    } else {
-                        self.set_status_message(format!("E86: Buffer {} does not exist", buffer_num));
-                    }
-                } else {
-                    self.set_status_message(format!("E492: Not an editor command: {}", command));
-                }
-            }
-        }
+        Ok(())
+    }
+    
+    /// Configure global keymap settings (example usage)
+    pub fn configure_keymap(&mut self, config: crate::keymap::KeymapConfig) {
+        self.keymap_processor.update_config(config);
+    }
+    
+    /// Add custom key binding (convenience method)
+    pub fn bind_key(&mut self, mode: Mode, key: crate::input::Key, action: crate::keymap::Action) {
+        self.keymap_processor.keymap_mut().bind(mode, key, action);
+    }
+    
+    /// Get current keymap configuration (for saving to file)
+    pub fn get_keymap_config(&self) -> crate::keymap::KeymapConfig {
+        self.keymap_processor.get_config()
+    }
+    
+    /// Reset keymap to defaults
+    pub fn reset_keymap_to_defaults(&mut self) {
+        self.keymap_processor = KeymapProcessor::new();
     }
 
-        
-    // Helper methods for buffer management
-    
-    /// Get a reference to the current buffer info
-    pub fn current_buffer(&self) -> &BufferInfo {
-        &self.buffers[self.current_buffer]
-    }
-    
-    /// Get a mutable reference to the current buffer info
-    pub fn current_buffer_mut(&mut self) -> &mut BufferInfo {
-        &mut self.buffers[self.current_buffer]
-    }
-    
-    /// Get the current buffer content
+    // ==== Accessor methods for buffer, cursor, and state ====
+
+    /// Get reference to current buffer
     pub fn buffer(&self) -> &Buffer {
-        &self.current_buffer().buffer
-    }
-    
-    /// Get a mutable reference to the current buffer content
-    pub fn buffer_mut(&mut self) -> &mut Buffer {
-        &mut self.current_buffer_mut().buffer
-    }
-    
-    /// Get the current cursor
-    pub fn cursor(&self) -> &Cursor {
-        &self.current_buffer().cursor
-    }
-    
-    /// Get a mutable reference to the current cursor
-    pub fn cursor_mut(&mut self) -> &mut Cursor {
-        &mut self.current_buffer_mut().cursor
-    }
-    
-    /// Get the current filename
-    pub fn filename(&self) -> &Option<String> {
-        &self.current_buffer().filename
-    }
-    
-    /// Set the current filename
-    pub fn set_filename(&mut self, filename: Option<String>) {
-        self.current_buffer_mut().filename = filename;
+        &self.buffers[self.current_buffer].buffer
     }
 
-    /// Get a mutable reference to the current buffer's history
-    pub fn history_mut(&mut self) -> &mut History {
-        &mut self.current_buffer_mut().history
+    /// Get mutable reference to current buffer
+    pub fn buffer_mut(&mut self) -> &mut Buffer {
+        &mut self.buffers[self.current_buffer].buffer
     }
+
+    /// Get reference to current cursor
+    pub fn cursor(&self) -> &Cursor {
+        &self.buffers[self.current_buffer].cursor
+    }
+
+    /// Get mutable reference to current cursor
+    pub fn cursor_mut(&mut self) -> &mut Cursor {
+        &mut self.buffers[self.current_buffer].cursor
+    }
+
+    /// Get current filename
+    pub fn filename(&self) -> &Option<String> {
+        &self.buffers[self.current_buffer].filename
+    }
+
+    /// Set filename for current buffer
+    pub fn set_filename(&mut self, filename: Option<String>) {
+        self.buffers[self.current_buffer].filename = filename;
+    }
+
+    /// Check if current buffer is modified
+    pub fn is_modified(&self) -> bool {
+        self.buffers[self.current_buffer].modified
+    }
+
+    /// Set modified flag for current buffer
+    pub fn set_modified(&mut self, modified: bool) {
+        self.buffers[self.current_buffer].modified = modified;
+    }
+
+    /// Get current scroll offset
+    pub fn scroll_offset(&self) -> usize {
+        self.buffers[self.current_buffer].scroll_offset
+    }
+
+    /// Set scroll offset for current buffer
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.buffers[self.current_buffer].scroll_offset = offset;
+    }
+
+    /// Get mutable reference to current buffer's history
+    pub fn history_mut(&mut self) -> &mut History {
+        &mut self.buffers[self.current_buffer].history
+    }
+
+    /// Get reference to current buffer's history
+    pub fn history(&self) -> &History {
+        &self.buffers[self.current_buffer].history
+    }
+
+    /// Get buffer information by filename (returns buffer index and line count)
+    pub fn get_buffer_info(&self, filename: &str) -> Option<(usize, usize)> {
+        for (index, buffer) in self.buffers.iter().enumerate() {
+            if let Some(ref buf_filename) = buffer.filename {
+                if buf_filename == filename {
+                    return Some((index, buffer.buffer.line_count()));
+                }
+            }
+        }
+        None
+    }
+
+    // ==== File I/O methods (implemented in io.rs) ====
     
     /// Add a new buffer and switch to it
-    pub fn add_buffer(&mut self, buffer_info: BufferInfo) -> usize {
+    pub fn add_buffer(&mut self, buffer_info: BufferInfo) {
         self.buffers.push(buffer_info);
-        let new_index = self.buffers.len() - 1;
-        self.current_buffer = new_index;
-        new_index
+        self.current_buffer = self.buffers.len() - 1;
     }
-    
-    /// Switch to the next buffer
+
+    /// Switch to next buffer
     pub fn next_buffer(&mut self) {
         if self.buffers.len() > 1 {
             self.current_buffer = (self.current_buffer + 1) % self.buffers.len();
         }
     }
-    
-    /// Switch to the previous buffer
+
+    /// Switch to previous buffer
     pub fn prev_buffer(&mut self) {
         if self.buffers.len() > 1 {
             self.current_buffer = if self.current_buffer == 0 {
@@ -1075,8 +931,8 @@ impl Editor {
             };
         }
     }
-    
-    /// Switch to buffer by index
+
+    /// Switch to specific buffer by index
     pub fn switch_to_buffer(&mut self, index: usize) -> bool {
         if index < self.buffers.len() {
             self.current_buffer = index;
@@ -1085,74 +941,28 @@ impl Editor {
             false
         }
     }
-    
-    /// Get list of buffer information for display
+
+    /// List all buffers for display
     pub fn list_buffers(&self) -> Vec<String> {
-        self.buffers.iter().enumerate().map(|(i, buf)| {
-            let current = if i == self.current_buffer { "%" } else { " " };
-            let modified = if buf.modified { "+" } else { " " };
-            let filename = buf.filename.as_deref().unwrap_or("[No Name]");
-            format!("{} {}{} {}", i + 1, current, modified, filename)
-        }).collect()
+        self.buffers.iter().enumerate()
+            .map(|(i, buf)| {
+                let name = buf.filename.as_deref().unwrap_or("[No Name]");
+                let modified = if buf.modified { "+" } else { "" };
+                let current = if i == self.current_buffer { "%" } else { " " };
+                format!("{}{} {} {}", i + 1, current, name, modified)
+            })
+            .collect()
     }
-    
-    /// Check if the current buffer is modified
-    pub fn is_modified(&self) -> bool {
-        self.current_buffer().modified
-    }
-    
-    /// Set the modified flag for the current buffer
-    pub fn set_modified(&mut self, modified: bool) {
-        self.current_buffer_mut().modified = modified;
-    }
-    
-    /// Get the current scroll offset
-    pub fn scroll_offset(&self) -> usize {
-        self.current_buffer().scroll_offset
-    }
-    
-    /// Set the current scroll offset
-    pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.current_buffer_mut().scroll_offset = offset;
-    }
-    
-    /// Get the current buffer's history
-    pub fn history(&self) -> &History {
-        &self.current_buffer().history
-    }
-    
-    /// Get buffer information for reporting (filename and line count)
-    pub fn get_buffer_info(&self, filename: &str) -> Option<(String, usize)> {
-        self.buffers.iter()
-            .find(|b| b.filename.as_ref().map(|f| f.as_str()) == Some(filename))
-            .map(|b| (filename.to_string(), b.buffer.line_count()))
-    }
-    
-    /// Close the current buffer
-    pub fn close_buffer(&mut self, force: bool) {
-        // Check if current buffer has modifications
-        if !force && self.is_modified() {
-            self.set_status_message("E37: No write since last change (add ! to override)".to_string());
-            return;
-        }
-        
-        // If this is the only buffer, quit the editor
-        if self.buffers.len() == 1 {
-            self.running = false;
-            return;
-        }
-        
-        // Remove the current buffer
-        self.buffers.remove(self.current_buffer);
-        
-        // Adjust current buffer index
-        if self.current_buffer >= self.buffers.len() {
-            self.current_buffer = self.buffers.len() - 1;
-        }
-        
-        // Show status message
-        let remaining = self.buffers.len();
-        self.set_status_message(format!("Buffer closed ({} remaining)", remaining));
+
+    // ==== Keymap handling methods ====
+
+    /// Handle keymap input for any mode
+    pub fn handle_keymap_input(&mut self, key: &crate::input::Key) -> std::io::Result<()> {
+        // We need to extract the keymap processor temporarily to avoid borrowing issues
+        let mut keymap_processor = std::mem::take(&mut self.keymap_processor);
+        let _ = keymap_processor.process_key(self, key);
+        self.keymap_processor = keymap_processor;
+        Ok(())
     }
 }
 
@@ -1194,7 +1004,15 @@ impl InsertModeGroup {
     /// Record a character that was deleted from existing buffer content (not just undoing recent insertions)
     pub fn add_deleted_char(&mut self, ch: char, pos: crate::buffer::Position) {
         if self.deletion_start_pos.is_none() {
+            // For backspace operations, the restoration position should be the leftmost deleted position
             self.deletion_start_pos = Some(pos);
+        } else {
+            // Update deletion_start_pos to the leftmost position
+            if let Some(current_pos) = self.deletion_start_pos {
+                if pos.row < current_pos.row || (pos.row == current_pos.row && pos.col < current_pos.col) {
+                    self.deletion_start_pos = Some(pos);
+                }
+            }
         }
         self.deleted_text.insert(0, ch); // Insert at beginning to maintain order
     }

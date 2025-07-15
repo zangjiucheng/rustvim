@@ -194,6 +194,33 @@ impl Editor {
         all_saved
     }
     
+    
+    /// Close current buffer (remove it from the buffers list)
+    pub fn close_buffer(&mut self, force: bool) {
+        // Check if buffer has unsaved changes
+        if !force && self.is_modified() {
+            self.set_status_message("E37: No write since last change (add ! to override)".to_string());
+            return;
+        }
+
+        // If this is the only buffer, exit the editor
+        if self.buffers.len() == 1 {
+            self.running = false;
+            return;
+        }
+
+        // Remove current buffer
+        self.buffers.remove(self.current_buffer);
+
+        // Adjust current buffer index
+        if self.current_buffer >= self.buffers.len() {
+            self.current_buffer = self.buffers.len() - 1;
+        }
+
+        // Show status
+        self.set_status_message(format!("Buffer closed. Now showing buffer {}", self.current_buffer + 1));
+    }
+
     /// Quit all buffers
     pub fn quit_all_editor(&mut self, force: bool) {
         if !force {
