@@ -267,13 +267,11 @@ impl Command for EditCommand {
                 Ok(())
             }
             EditCommand::DeleteSelection => {
-                // TODO: Implement for Day 17 (Visual mode)
-                // For now, just return Ok to avoid compilation errors
+                editor.delete_visual_selection().map_err(|e| e.to_string())?;
                 Ok(())
             }
             EditCommand::YankSelection => {
-                // TODO: Implement for Day 17 (Visual mode)
-                // For now, just return Ok to avoid compilation errors
+                editor.yank_visual_selection().map_err(|e| e.to_string())?;
                 Ok(())
             }
         }
@@ -365,19 +363,13 @@ impl Command for ModeSwitchCommand {
                 editor.start_search();
             }
             ModeSwitchCommand::EnterVisual => {
-                // TODO: Implement for Day 17 (Visual mode)
-                // For now, just return Ok to avoid compilation errors
-                editor.mode = Mode::Normal; // Placeholder
+                editor.enter_visual_mode();
             }
             ModeSwitchCommand::EnterVisualLine => {
-                // TODO: Implement for Day 17 (Visual mode)
-                // For now, just return Ok to avoid compilation errors
-                editor.mode = Mode::Normal; // Placeholder
+                editor.enter_visual_line_mode();
             }
             ModeSwitchCommand::ExitVisual => {
-                // TODO: Implement for Day 17 (Visual mode)
-                // For now, just return Ok to avoid compilation errors
-                editor.mode = Mode::Normal; // Placeholder
+                editor.exit_visual_mode();
             }
         }
         Ok(())
@@ -614,13 +606,37 @@ impl ExCommandExecutor {
     }
 }
 
+/// Character types for word motion logic
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum CharType {
+    Whitespace,
+    Word,        // alphanumeric + underscore
+    Punctuation, // symbols, punctuation
+}
+
 /// Motion calculation utilities
 pub struct MotionCalculator;
 
 impl MotionCalculator {
-    /// Helper function to check if a character is a word character
+    /// Helper function to check if a character is a word character (alphanumeric + underscore)
     fn is_word_char(c: char) -> bool {
         c.is_alphanumeric() || c == '_'
+    }
+    
+    /// Helper function to check if a character is punctuation/symbol
+    fn is_punct_char(c: char) -> bool {
+        !c.is_whitespace() && !Self::is_word_char(c)
+    }
+    
+    /// Get the character type for word motion logic
+    fn char_type(c: char) -> CharType {
+        if c.is_whitespace() {
+            CharType::Whitespace
+        } else if Self::is_word_char(c) {
+            CharType::Word
+        } else {
+            CharType::Punctuation
+        }
     }
     
     /// Move cursor to the beginning of the next word (w command)
@@ -630,45 +646,51 @@ impl MotionCalculator {
                 let chars: Vec<char> = line.chars().collect();
                 
                 if *col >= chars.len() {
+                    // At end of line, move to next line
                     if *row + 1 < editor.buffer().line_count() {
                         *row += 1;
                         *col = 0;
                         
+                        // Find first non-whitespace character in new line
                         if let Some(next_line) = editor.buffer().get_line(*row) {
                             let next_chars: Vec<char> = next_line.chars().collect();
                             
                             if next_chars.is_empty() {
-                                break;
+                                break; // Empty line is a valid word boundary
                             }
                             
+                            // Skip leading whitespace
                             while *col < next_chars.len() && next_chars[*col].is_whitespace() {
                                 *col += 1;
                             }
                             
                             if *col < next_chars.len() {
-                                break;
+                                break; // Found start of next word
                             }
                         }
                     } else {
-                        break;
+                        break; // At end of file
                     }
                 } else {
-                    *col += 1;
-                    
-                    while *col < chars.len() && Self::is_word_char(chars[*col]) {
+                    // Move at least one character forward
+                    if *col < chars.len() {
+                        let current_type = Self::char_type(chars[*col]);
                         *col += 1;
-                    }
-                    
-                    while *col < chars.len() && !Self::is_word_char(chars[*col]) && !chars[*col].is_whitespace() {
-                        *col += 1;
-                    }
-                    
-                    while *col < chars.len() && chars[*col].is_whitespace() {
-                        *col += 1;
-                    }
-                    
-                    if *col < chars.len() && Self::is_word_char(chars[*col]) {
-                        break;
+                        
+                        // Skip remaining characters of the same type
+                        while *col < chars.len() && Self::char_type(chars[*col]) == current_type {
+                            *col += 1;
+                        }
+                        
+                        // Skip whitespace to find next word/punctuation
+                        while *col < chars.len() && chars[*col].is_whitespace() {
+                            *col += 1;
+                        }
+                        
+                        if *col < chars.len() {
+                            break; // Found start of next word/punctuation
+                        }
+                        // If we reached end of line, continue loop to handle line boundary
                     }
                 }
             } else {
@@ -677,13 +699,14 @@ impl MotionCalculator {
         }
     }
     
-    /// Move cursor to the beginning of the previous word (b command)
+    /// Move cursor to the beginning of the previous word (b command)  
     pub fn word_backward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
                 let chars: Vec<char> = line.chars().collect();
                 
                 if *col == 0 {
+                    // At beginning of line, move to previous line
                     if *row > 0 {
                         *row -= 1;
                         if let Some(prev_line) = editor.buffer().get_line(*row) {
@@ -691,22 +714,26 @@ impl MotionCalculator {
                             
                             if prev_chars.is_empty() {
                                 *col = 0;
-                                break;
+                                break; // Empty line is a valid word boundary
                             }
                             
                             *col = prev_chars.len();
+                            // Continue to find word boundary in previous line
                         }
                     } else {
-                        break;
+                        break; // At beginning of file
                     }
                 } else {
+                    // Move back at least one character
                     *col -= 1;
                     
-                    while *col > 0 && (chars[*col].is_whitespace() || (!Self::is_word_char(chars[*col]) && !chars[*col].is_whitespace())) {
+                    // Skip whitespace
+                    while *col > 0 && chars[*col].is_whitespace() {
                         *col -= 1;
                     }
                     
-                    if *col == 0 && (chars[*col].is_whitespace() || (!Self::is_word_char(chars[*col]) && !chars[*col].is_whitespace())) {
+                    // If we're at position 0 and it's whitespace, handle line boundary
+                    if *col == 0 && chars[*col].is_whitespace() {
                         if *row > 0 {
                             *row -= 1;
                             if let Some(prev_line) = editor.buffer().get_line(*row) {
@@ -718,14 +745,20 @@ impl MotionCalculator {
                                 }
                                 
                                 *col = prev_chars.len();
-                                continue;
+                                continue; // Continue processing in previous line
                             }
                         }
                         break;
                     }
                     
-                    while *col > 0 && Self::is_word_char(chars[*col - 1]) {
-                        *col -= 1;
+                    // Find the beginning of the current word/punctuation group
+                    if *col < chars.len() {
+                        let current_type = Self::char_type(chars[*col]);
+                        
+                        // Move back while characters are of the same type
+                        while *col > 0 && Self::char_type(chars[*col - 1]) == current_type {
+                            *col -= 1;
+                        }
                     }
                     
                     break;
@@ -738,73 +771,68 @@ impl MotionCalculator {
     
     /// Move cursor to the end of the current/next word (e command)
     pub fn word_end(editor: &Editor, row: &mut usize, col: &mut usize) {
-        if let Some(line) = editor.buffer().get_line(*row) {
-            let chars: Vec<char> = line.chars().collect();
-            
-            if chars.is_empty() {
-                while *row + 1 < editor.buffer().line_count() {
-                    *row += 1;
-                    if let Some(next_line) = editor.buffer().get_line(*row) {
-                        let next_chars: Vec<char> = next_line.chars().collect();
-                        if !next_chars.is_empty() {
-                            *col = 0;
-                            while *col < next_chars.len() && !Self::is_word_char(next_chars[*col]) {
-                                *col += 1;
-                            }
-                            if *col < next_chars.len() {
-                                while *col < next_chars.len() && Self::is_word_char(next_chars[*col]) {
-                                    *col += 1;
-                                }
-                                *col = col.saturating_sub(1);
-                            }
-                            break;
-                        }
-                    }
-                }
-                return;
-            }
-            
-            if *col >= chars.len() {
-                if *row + 1 < editor.buffer().line_count() {
-                    *row += 1;
-                    *col = 0;
-                }
-            } else {
-                if Self::is_word_char(chars[*col]) {
-                    while *col < chars.len() && Self::is_word_char(chars[*col]) {
-                        *col += 1;
-                    }
-                    *col = col.saturating_sub(1);
-                } else {
-                    while *col < chars.len() && !Self::is_word_char(chars[*col]) {
-                        *col += 1;
-                    }
-                    
-                    if *col < chars.len() {
-                        while *col < chars.len() && Self::is_word_char(chars[*col]) {
-                            *col += 1;
-                        }
-                        *col = col.saturating_sub(1);
-                    } else if *row + 1 < editor.buffer().line_count() {
+        loop {
+            if let Some(line) = editor.buffer().get_line(*row) {
+                let chars: Vec<char> = line.chars().collect();
+                
+                if chars.is_empty() {
+                    // Empty line, move to next line
+                    if *row + 1 < editor.buffer().line_count() {
                         *row += 1;
                         *col = 0;
-                        if let Some(next_line) = editor.buffer().get_line(*row) {
-                            let next_chars: Vec<char> = next_line.chars().collect();
-                            
-                            if next_chars.is_empty() {
-                                return;
-                            }
-                            
-                            while *col < next_chars.len() && next_chars[*col].is_whitespace() {
-                                *col += 1;
-                            }
-                            while *col < next_chars.len() && Self::is_word_char(next_chars[*col]) {
-                                *col += 1;
-                            }
-                            *col = col.saturating_sub(1);
+                        continue;
+                    } else {
+                        break; // End of file
+                    }
+                }
+                
+                if *col >= chars.len() {
+                    // At end of line, move to next line
+                    if *row + 1 < editor.buffer().line_count() {
+                        *row += 1;
+                        *col = 0;
+                        continue;
+                    } else {
+                        break; // End of file
+                    }
+                }
+                
+                // Special case: if we're at the end of a word/punctuation, move forward first
+                if *col < chars.len() {
+                    let current_type = Self::char_type(chars[*col]);
+                    
+                    // If we're at the end of a word/punctuation group, or on whitespace, move to next
+                    if current_type == CharType::Whitespace || 
+                       (*col + 1 < chars.len() && Self::char_type(chars[*col + 1]) != current_type) ||
+                       (*col + 1 >= chars.len()) {
+                        
+                        // Move forward past current character and whitespace
+                        *col += 1;
+                        
+                        // Skip whitespace
+                        while *col < chars.len() && chars[*col].is_whitespace() {
+                            *col += 1;
+                        }
+                        
+                        if *col >= chars.len() {
+                            continue; // Continue to next line
                         }
                     }
                 }
+                
+                // Now find the end of the current word/punctuation group
+                if *col < chars.len() {
+                    let current_type = Self::char_type(chars[*col]);
+                    
+                    // Move to the end of the current word/punctuation group
+                    while *col + 1 < chars.len() && Self::char_type(chars[*col + 1]) == current_type {
+                        *col += 1;
+                    }
+                }
+                
+                break;
+            } else {
+                break;
             }
         }
     }

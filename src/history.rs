@@ -21,6 +21,14 @@ pub enum EditAction {
         deleted_text: String,
         deletion_start_pos: Option<Position>,
     },
+    /// Visual block delete operation (rectangular block of text)
+    BlockDelete {
+        start_row: usize,
+        start_col: usize,
+        end_row: usize,
+        end_col: usize,
+        deleted_text: Vec<String>,
+    },
 }
 
 impl EditAction {
@@ -167,6 +175,19 @@ impl History {
                     
                     start_pos
                 }
+                EditAction::BlockDelete { start_row, start_col, end_row: _, end_col: _, deleted_text } => {
+                    // Undo block delete by reinserting all the deleted text at original positions
+                    for (i, line_text) in deleted_text.iter().enumerate() {
+                        let row = start_row + i;
+                        if !line_text.is_empty() {
+                            for (j, ch) in line_text.chars().enumerate() {
+                                let pos = crate::buffer::Position::new(row, start_col + j);
+                                buffer.insert_char(pos, ch);
+                            }
+                        }
+                    }
+                    crate::buffer::Position::new(start_row, start_col)
+                }
             };
             
             // Push the action to redo stack
@@ -209,22 +230,31 @@ impl History {
                 }
                 EditAction::InsertModeSession { start_pos, inserted_text, deleted_text, deletion_start_pos } => {
                     // First, delete any text that was inserted
-                    if !inserted_text.is_empty() {
-                        let deletion_pos = crate::buffer::Position::new(
-                            start_pos.row, 
-                            start_pos.col + inserted_text.chars().count()
-                        );
-                        Self::delete_text_from_buffer(buffer, deletion_pos, &inserted_text);
-                    }
-                    
-                    // Then, re-insert any text that was deleted
                     if !deleted_text.is_empty() {
                         if let Some(del_pos) = deletion_start_pos {
-                            Self::reinsert_deleted_text(buffer, del_pos, &deleted_text);
+                            Self::delete_text_from_buffer(buffer, del_pos, &deleted_text);
                         }
                     }
                     
+                    // Then, re-insert any text that was deleted
+                    if !inserted_text.is_empty() {
+                        Self::reinsert_deleted_text(buffer, start_pos, &inserted_text);
+                    }
+                    
                     start_pos
+                }
+                EditAction::BlockDelete { start_row, start_col, end_row: _, end_col: _, deleted_text } => {
+                    // Redo block delete by deleting the same rectangular area again
+                    for (i, line_text) in deleted_text.iter().enumerate() {
+                        let row = start_row + i;
+                        if !line_text.is_empty() {
+                            for j in (0..line_text.len()).rev() {
+                                let pos = crate::buffer::Position::new(row, start_col + j);
+                                buffer.delete_char(pos);
+                            }
+                        }
+                    }
+                    crate::buffer::Position::new(start_row, start_col)
                 }
             };
             

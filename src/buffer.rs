@@ -136,6 +136,27 @@ impl Buffer {
         }
     }
     
+    /// Remove a line at the specified row index
+    /// Returns the removed line content if successful
+    pub fn remove_line(&mut self, row: usize) -> Option<String> {
+        if row < self.lines.len() && self.lines.len() > 1 {
+            Some(self.lines.remove(row))
+        } else {
+            None
+        }
+    }
+    
+    /// Clear the content of a line but keep the line in the buffer
+    pub fn clear_line(&mut self, row: usize) -> Option<String> {
+        if row < self.lines.len() {
+            let old_content = self.lines[row].clone();
+            self.lines[row].clear();
+            Some(old_content)
+        } else {
+            None
+        }
+    }
+    
     /// Get a character at the specified position
     pub fn get_char(&self, pos: (usize, usize)) -> Option<char> {
         let (row, col) = pos;

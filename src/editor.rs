@@ -98,6 +98,12 @@ pub struct Editor {
     
     /// Keymap processor for handling key→action mappings
     pub keymap_processor: KeymapProcessor,
+     /// Visual mode selection start position (when in Visual mode)
+    pub visual_start: Option<Cursor>,
+
+    /// Visual mode type: character-based (v), line-based (V), or block-based (Ctrl+V)
+    pub visual_line_mode: bool,
+    pub visual_block_mode: bool,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -165,6 +171,9 @@ impl Editor {
             search_match: None,
             command_input: String::new(),
             keymap_processor: KeymapProcessor::new(),
+            visual_start: None,
+            visual_line_mode: false,
+            visual_block_mode: false,
         }
     }
     
@@ -213,8 +222,8 @@ impl Editor {
                             self.command_input.clear();
                         }
                         Mode::Visual => {
-                            // TODO: Exit visual mode when implemented
-                            self.mode = Mode::Normal;
+                            // Exit visual mode when escape is pressed
+                            self.exit_visual_mode();
                         }
                         Mode::Normal => {
                             // In normal mode, ESC does nothing (Vim behavior)
@@ -303,10 +312,10 @@ impl Editor {
                                 self.terminal.write(after)?;
                             }
                         } else {
-                            self.terminal.write_truncated(line, cols)?;
+                            self.draw_line_with_visual_highlight(line, buffer_row, cols)?;
                         }
                     } else {
-                        self.terminal.write_truncated(line, cols)?;
+                        self.draw_line_with_visual_highlight(line, buffer_row, cols)?;
                     }
                 }
             } else {
@@ -319,6 +328,90 @@ impl Editor {
             if screen_row < content_rows - 1 {
                 self.terminal.write("\r\n")?;
             }
+        }
+        
+        Ok(())
+    }
+    
+    /// Draw a line with visual mode highlighting if applicable
+    fn draw_line_with_visual_highlight(&self, line: &str, row: usize, max_width: usize) -> std::io::Result<()> {
+        if self.mode == Mode::Visual {
+            if let Some((start, end)) = self.get_visual_selection() {
+                if self.visual_block_mode {
+                    // Block-wise selection: highlight rectangular block
+                    if row >= start.row && row <= end.row {
+                        let chars: Vec<char> = line.chars().collect();
+                        let min_col = std::cmp::min(start.col, end.col);
+                        let max_col = std::cmp::max(start.col, end.col);
+                        
+                        let before = chars.iter().take(min_col).collect::<String>();
+                        let selected = chars.iter().skip(min_col).take(max_col + 1 - min_col).collect::<String>();
+                        let after = chars.iter().skip(max_col + 1).collect::<String>();
+                        
+                        self.terminal.write(&before)?;
+                        if !selected.is_empty() {
+                            self.terminal.write_highlighted(&selected)?;
+                        }
+                        self.terminal.write(&after)?;
+                    } else {
+                        // Not in block selection rows
+                        self.terminal.write_truncated(line, max_width)?;
+                    }
+                } else if self.visual_line_mode && row >= start.row && row <= end.row {
+                    // Line-wise selection: highlight entire line
+                    self.terminal.write_highlighted(&line.chars().take(max_width).collect::<String>())?;
+                } else if !self.visual_line_mode {
+                    // Character-wise selection
+                    if start.row == end.row && row == start.row {
+                        // Single line selection
+                        let chars: Vec<char> = line.chars().collect();
+                        let before = chars.iter().take(start.col).collect::<String>();
+                        let selected = chars.iter().skip(start.col).take(end.col + 1 - start.col).collect::<String>();
+                        let after = chars.iter().skip(end.col + 1).collect::<String>();
+                        
+                        self.terminal.write(&before)?;
+                        if !selected.is_empty() {
+                            self.terminal.write_highlighted(&selected)?;
+                        }
+                        self.terminal.write(&after)?;
+                    } else if row == start.row {
+                        // First line of multi-line selection
+                        let chars: Vec<char> = line.chars().collect();
+                        let before = chars.iter().take(start.col).collect::<String>();
+                        let selected = chars.iter().skip(start.col).collect::<String>();
+                        
+                        self.terminal.write(&before)?;
+                        if !selected.is_empty() {
+                            self.terminal.write_highlighted(&selected)?;
+                        }
+                    } else if row == end.row {
+                        // Last line of multi-line selection
+                        let chars: Vec<char> = line.chars().collect();
+                        let selected = chars.iter().take(end.col + 1).collect::<String>();
+                        let after = chars.iter().skip(end.col + 1).collect::<String>();
+                        
+                        if !selected.is_empty() {
+                            self.terminal.write_highlighted(&selected)?;
+                        }
+                        self.terminal.write(&after)?;
+                    } else if row > start.row && row < end.row {
+                        // Middle line of multi-line selection
+                        self.terminal.write_highlighted(&line.chars().take(max_width).collect::<String>())?;
+                    } else {
+                        // Not in selection
+                        self.terminal.write_truncated(line, max_width)?;
+                    }
+                } else {
+                    // Not in selection
+                    self.terminal.write_truncated(line, max_width)?;
+                }
+            } else {
+                // No visual selection
+                self.terminal.write_truncated(line, max_width)?;
+            }
+        } else {
+            // Not in visual mode
+            self.terminal.write_truncated(line, max_width)?;
         }
         
         Ok(())
@@ -359,11 +452,25 @@ impl Editor {
         let filename = self.filename().as_deref().unwrap_or("[No Name]");
         let modified = if self.is_modified() { " [Modified]" } else { "" };
         let buffer_info = format!("({}/{})", self.current_buffer + 1, self.buffers.len());
-        let mode = format!("{:?}", self.mode);
+        let mode = match self.mode {
+            Mode::Insert => "-- INSERT --".to_string(),
+            Mode::Visual => {
+                if self.visual_block_mode {
+                    "-- VISUAL BLOCK --".to_string()
+                } else if self.visual_line_mode {
+                    "-- VISUAL LINE --".to_string()
+                } else {
+                    "-- VISUAL --".to_string()
+                }
+            },
+            Mode::Command => "-- COMMAND --".to_string(),
+            Mode::Search => "-- SEARCH --".to_string(),
+            Mode::Normal => "".to_string(), // Normal mode shows no mode indicator
+        };
         let position = format!("{}:{}", self.cursor().row + 1, self.cursor().col + 1);
         let lines = format!("{} lines", self.buffer().line_count());
         
-        let left = format!("{}{} {} - {}", filename, modified, buffer_info, mode);
+        let left = format!("{}{} {} {}", filename, modified, buffer_info, mode);
         let right = format!("{} - {}", position, lines);
         
         // Calculate spacing
@@ -1020,6 +1127,314 @@ impl InsertModeGroup {
     /// Check if this insert session has any changes (insertions or deletions)
     pub fn has_changes(&self) -> bool {
         !self.inserted_text.is_empty() || !self.deleted_text.is_empty()
+    }
+}
+
+impl Editor {
+    // === Visual Mode Methods ===
+    
+    /// Enter character-wise Visual mode (v)
+    pub fn enter_visual_mode(&mut self) {
+        self.mode = Mode::Visual;
+        self.visual_start = Some(*self.cursor());
+        self.visual_line_mode = false;
+        self.visual_block_mode = false;
+    }
+    
+    /// Enter line-wise Visual mode (V)
+    pub fn enter_visual_line_mode(&mut self) {
+        self.mode = Mode::Visual;
+        self.visual_start = Some(*self.cursor());
+        self.visual_line_mode = true;
+        self.visual_block_mode = false;
+    }
+    
+    /// Enter block-wise Visual mode (Ctrl+V)
+    pub fn enter_visual_block_mode(&mut self) {
+        self.mode = Mode::Visual;
+        self.visual_start = Some(*self.cursor());
+        self.visual_line_mode = false;
+        self.visual_block_mode = true;
+    }
+    
+    /// Exit Visual mode and return to Normal mode
+    pub fn exit_visual_mode(&mut self) {
+        self.mode = Mode::Normal;
+        self.visual_start = None;
+        self.visual_line_mode = false;
+        self.visual_block_mode = false;
+    }
+    
+    /// Get the current visual selection range (start, end)
+    /// Returns None if not in Visual mode
+    pub fn get_visual_selection(&self) -> Option<(Cursor, Cursor)> {
+        if self.mode != Mode::Visual {
+            return None;
+        }
+        
+        let start = self.visual_start?;
+        let end = *self.cursor();
+        
+        // Ensure start is before end
+        let (start, end) = if start.row < end.row || (start.row == end.row && start.col <= end.col) {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        
+        Some((start, end))
+    }
+    
+    /// Check if a position is within the visual selection
+    pub fn is_in_visual_selection(&self, row: usize, col: usize) -> bool {
+        if let Some((start, end)) = self.get_visual_selection() {
+            if self.visual_block_mode {
+                // Block-wise selection: rectangular block
+                let min_col = std::cmp::min(start.col, end.col);
+                let max_col = std::cmp::max(start.col, end.col);
+                row >= start.row && row <= end.row && col >= min_col && col <= max_col
+            } else if self.visual_line_mode {
+                // Line-wise selection: entire lines
+                row >= start.row && row <= end.row
+            } else {
+                // Character-wise selection
+                if start.row == end.row {
+                    // Single line selection
+                    row == start.row && col >= start.col && col <= end.col
+                } else {
+                    // Multi-line selection
+                    if row == start.row {
+                        col >= start.col
+                    } else if row == end.row {
+                        col <= end.col
+                    } else {
+                        row > start.row && row < end.row
+                    }
+                }
+            }
+        } else {
+            false
+        }
+    }
+    
+    /// Delete the current visual selection
+    pub fn delete_visual_selection(&mut self) -> Result<(), String> {
+        let selection = self.get_visual_selection().ok_or("No visual selection")?;
+        let (start, end) = selection;
+        
+        if self.visual_block_mode {
+            // Delete rectangular block
+            let min_col = std::cmp::min(start.col, end.col);
+            let max_col = std::cmp::max(start.col, end.col);
+            
+            // Collect all the text that will be deleted for both register and undo
+            let mut deleted_block = Vec::new();
+            
+            // First pass: collect all the text that will be deleted
+            for row in start.row..=end.row {
+                if row < self.buffer().line_count() {
+                    if let Some(line) = self.buffer().get_line(row) {
+                        let chars: Vec<char> = line.chars().collect();
+                        let actual_max_col = std::cmp::min(max_col, chars.len().saturating_sub(1));
+                        let actual_min_col = std::cmp::min(min_col, chars.len());
+                        
+                        if actual_min_col <= actual_max_col && actual_min_col < chars.len() {
+                            let deleted_part: String = chars[actual_min_col..=actual_max_col].iter().collect();
+                            deleted_block.push(deleted_part);
+                        } else {
+                            deleted_block.push(String::new());
+                        }
+                    } else {
+                        deleted_block.push(String::new());
+                    }
+                } else {
+                    deleted_block.push(String::new());
+                }
+            }
+            
+            // Store in register for pasting
+            if !deleted_block.is_empty() {
+                let deleted_text = deleted_block.join("\n");
+                self.register.store_text(deleted_text);
+            }
+            
+            // Create a custom block undo action that will restore the entire block
+            let block_undo = crate::history::EditAction::BlockDelete {
+                start_row: start.row,
+                start_col: min_col,
+                end_row: end.row,
+                end_col: max_col,
+                deleted_text: deleted_block.clone(),
+            };
+            self.history_mut().push(block_undo);
+            
+            // Second pass: actually delete the characters from bottom to top
+            for row in (start.row..=end.row).rev() {
+                if row < self.buffer().line_count() {
+                    if let Some(line) = self.buffer().get_line(row) {
+                        let chars: Vec<char> = line.chars().collect();
+                        let actual_max_col = std::cmp::min(max_col, chars.len().saturating_sub(1));
+                        let actual_min_col = std::cmp::min(min_col, chars.len());
+                        
+                        if actual_min_col <= actual_max_col && actual_min_col < chars.len() {
+                            // Delete characters one by one from right to left to maintain indices
+                            for col in (actual_min_col..=actual_max_col).rev() {
+                                let pos = crate::buffer::Position::new(row, col);
+                                self.buffer_mut().delete_char(pos);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Position cursor at top-left of the deleted block
+            self.move_cursor(start.row, min_col);
+        } else if self.visual_line_mode {
+            // Delete entire lines using proper line deletion
+            let line_count = end.row - start.row + 1;
+            
+            // First collect the lines for register and undo
+            let mut deleted_lines = Vec::new();
+            for i in 0..line_count {
+                let row = start.row + i;
+                if row < self.buffer().line_count() {
+                    if let Some(line) = self.buffer().get_line(row) {
+                        deleted_lines.push(line.clone());
+                    }
+                }
+            }
+            
+            // Store in register
+            if !deleted_lines.is_empty() {
+                let deleted_text = deleted_lines.join("\n") + "\n";
+                self.register.store_lines(deleted_text.clone());
+                
+                // Record the line deletion for undo
+                let delete_pos = crate::buffer::Position::new(start.row, 0);
+                let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
+                self.history_mut().push(action);
+            }
+            
+            // Delete the lines properly by removing them from the buffer
+            for _ in 0..line_count {
+                if self.buffer().line_count() > 1 && start.row < self.buffer().line_count() {
+                    // Remove the line completely
+                    self.buffer_mut().remove_line(start.row);
+                } else if self.buffer().line_count() == 1 {
+                    // If it's the last line in the buffer, just clear it
+                    self.buffer_mut().clear_line(start.row);
+                    break;
+                }
+            }
+            
+            // Ensure cursor is within bounds
+            if start.row >= self.buffer().line_count() {
+                self.cursor_mut().row = self.buffer().line_count().saturating_sub(1);
+            } else {
+                self.cursor_mut().row = start.row;
+            }
+            self.cursor_mut().col = 0;
+        } else {
+            // Delete character range with proper undo tracking
+            let start_pos = (start.row, start.col);
+            let end_pos = if end.col < self.buffer().line_length(end.row) {
+                (end.row, end.col + 1) // Make inclusive by adding 1 if not at line end
+            } else {
+                (end.row, end.col) // At line end, don't go beyond
+            };
+            
+            // Extract text for register and undo
+            let deleted_text = crate::commands::TextOperations::extract_range(self, start_pos, end_pos);
+            if !deleted_text.is_empty() {
+                self.register.store_text(deleted_text.clone());
+                
+                // Record the deletion for undo
+                let delete_pos = crate::buffer::Position::new(start.row, start.col);
+                let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
+                self.history_mut().push(action);
+            }
+            
+            // Delete the range
+            crate::commands::TextOperations::delete_range(self, start_pos, end_pos);
+            
+            // Position cursor at start of deleted range
+            self.move_cursor(start.row, start.col);
+        }
+        
+        self.set_modified(true);
+        self.update_scroll();
+        
+        // Exit visual mode
+        self.exit_visual_mode();
+        
+        Ok(())
+    }
+    
+    /// Yank (copy) the current visual selection
+    pub fn yank_visual_selection(&mut self) -> Result<(), String> {
+        let selection = self.get_visual_selection().ok_or("No visual selection")?;
+        let (start, end) = selection;
+        
+        if self.visual_block_mode {
+            // Yank rectangular block
+            let min_col = std::cmp::min(start.col, end.col);
+            let max_col = std::cmp::max(start.col, end.col);
+            let mut yanked_lines = Vec::new();
+            
+            for row in start.row..=end.row {
+                if row < self.buffer().line_count() {
+                    if let Some(line) = self.buffer().get_line(row) {
+                        let chars: Vec<char> = line.chars().collect();
+                        let actual_max_col = std::cmp::min(max_col, chars.len().saturating_sub(1));
+                        let actual_min_col = std::cmp::min(min_col, chars.len());
+                        
+                        if actual_min_col <= actual_max_col && actual_min_col < chars.len() {
+                            let yanked_part: String = chars[actual_min_col..=actual_max_col].iter().collect();
+                            yanked_lines.push(yanked_part);
+                        } else {
+                            yanked_lines.push(String::new());
+                        }
+                    }
+                }
+            }
+            
+            let yanked_text = yanked_lines.join("\n");
+            self.register.store_text(yanked_text);
+        } else if self.visual_line_mode {
+            // Yank entire lines
+            let yanked_text = self.extract_line_range(start.row, end.row);
+            self.register.store_lines(yanked_text);
+        } else {
+            // Yank character range using existing method
+            // For character-wise visual selection, we need to include the end character
+            let start_pos = (start.row, start.col);
+            let end_pos = if end.col < self.buffer().line_length(end.row) {
+                (end.row, end.col + 1) // Make inclusive by adding 1 if not at line end
+            } else {
+                (end.row, end.col) // At line end, don't go beyond
+            };
+            self.yank_range(start_pos, end_pos)?;
+        }
+        
+        // Exit visual mode
+        self.exit_visual_mode();
+        
+        Ok(())
+    }
+    
+    /// Extract text from a range of lines (inclusive)
+    fn extract_line_range(&self, start_row: usize, end_row: usize) -> String {
+        let buffer = self.buffer();
+        let mut text = String::new();
+        
+        for row in start_row..=end_row {
+            if let Some(line) = buffer.get_line(row) {
+                text.push_str(line);
+                text.push('\n');
+            }
+        }
+        
+        text
     }
 }
 

@@ -79,6 +79,7 @@ pub enum Action {
     /// Visual mode actions
     EnterVisual,
     EnterVisualLine,
+    EnterVisualBlock,
     /// Multi-character sequences
     Pending(PendingAction),
 }
@@ -335,6 +336,7 @@ impl Keymap {
         // === Visual Mode ===
         keymap.insert(Key::Char('v'), Action::EnterVisual);
         keymap.insert(Key::Char('V'), Action::EnterVisualLine);
+        keymap.insert(Key::Ctrl('v'), Action::EnterVisualBlock);
         
         keymap
     }
@@ -585,21 +587,23 @@ impl KeymapProcessor {
             return self.handle_pending_operator(editor, key, operator.clone());
         }
         
-        // Handle operator keys that start operator-pending mode
-        match key {
-            Key::Char('d') => {
-                self.pending_operator = Some(Operator::Delete);
-                return Ok(true);
+        // Handle operator keys that start operator-pending mode (only in Normal mode)
+        if editor.mode == Mode::Normal {
+            match key {
+                Key::Char('d') => {
+                    self.pending_operator = Some(Operator::Delete);
+                    return Ok(true);
+                }
+                Key::Char('y') => {
+                    self.pending_operator = Some(Operator::Yank);
+                    return Ok(true);
+                }
+                Key::Char('g') => {
+                    self.multi_key_state = Some(MultiKeyState::G);
+                    return Ok(true);
+                }
+                _ => {}
             }
-            Key::Char('y') => {
-                self.pending_operator = Some(Operator::Yank);
-                return Ok(true);
-            }
-            Key::Char('g') => {
-                self.multi_key_state = Some(MultiKeyState::G);
-                return Ok(true);
-            }
-            _ => {}
         }
         
         // Handle pending multi-character sequences
@@ -944,13 +948,15 @@ impl KeymapProcessor {
                 Ok(true)
             }
             Action::EnterVisual => {
-                // TODO: Implement for Day 17
-                editor.mode = Mode::Visual;
+                editor.enter_visual_mode();
                 Ok(true)
             }
             Action::EnterVisualLine => {
-                // TODO: Implement for Day 17  
-                editor.mode = Mode::Visual;
+                editor.enter_visual_line_mode();
+                Ok(true)
+            }
+            Action::EnterVisualBlock => {
+                editor.enter_visual_block_mode();
                 Ok(true)
             }
             Action::Pending(pending) => {

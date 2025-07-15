@@ -1,267 +1,305 @@
-# VimLike Editor
+# RustVim - A Vim-like Text Editor in Rust
 
-A minimal Vim-inspired text editor built in Rust, following a 30-day implementation plan.
+A comprehensive vim-like text editor implemented in Rust, featuring multiple editing modes, visual selection (including block mode), file operations, search functionality, and a robust undo/redo system.
 
-## Project Overview
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+![Terminal](https://img.shields.io/badge/terminal-vim--like-green?style=for-the-badge)
 
-This project implements a text editor that mimics core Vim functionality while being built from scratch in Rust. The editor focuses on:
+## Features
 
-- Modal editing (Normal, Insert, Command, Visual modes)
-- Raw terminal control without external libraries
-- Efficient text buffer management
-- Vim-like keybindings and commands
-- Educational code structure for learning purposes
+### 🎯 Modal Editing
+- **Normal Mode**: Navigation and command execution
+- **Insert Mode**: Text insertion with full editing capabilities  
+- **Visual Mode**: Character-wise, line-wise, and block-wise text selection
+- **Command Mode**: Ex-command execution (`:w`, `:q`, `:wq`, `:e`, etc.)
+- **Search Mode**: Forward and backward text search with highlighting
 
-## Architecture
+### 📝 Text Operations
+- **Visual Block Mode**: Rectangular text selection with Ctrl+V
+- **Block Operations**: Copy, delete, and manipulate rectangular text blocks
+- **Composite Undo**: Complex operations undo as single units
+- **Yank/Paste**: Full register system for copy/paste operations
+- **Line Operations**: Insert, delete, and manipulate entire lines
 
-The editor is structured into logical modules:
+### 🔍 Search & Navigation
+- **Pattern Search**: Forward (`/`) and backward (`?`) search
+- **Search Highlighting**: Visual feedback for matches
+- **Word Navigation**: Forward (`w`) and backward (`b`) word movement
+- **Line Navigation**: Beginning (`0`, `^`) and end (`$`) of line
+- **File Navigation**: Go to beginning (`gg`) and end (`G`) of file
 
-### Core Modules
+### 💾 File Management
+- **Multi-file Support**: Edit multiple files in one session
+- **File Operations**: Load, save, save-as, and create new files
+- **Change Detection**: Prevents data loss with unsaved change warnings
+- **Newline Preservation**: Maintains original file formatting
 
-- **`editor.rs`** - Main editor state, modal editing controller, and event loop
-- **`buffer.rs`** - Unicode-safe text storage with efficient editing operations and newline preservation
-- **`terminal.rs`** - Raw terminal I/O and screen control using ANSI escape codes
-- **`input.rs`** - Comprehensive keystroke reading and escape sequence parsing
-- **`commands.rs`** - Complete command system for Normal/Insert modes with operator-motion support
-- **`history.rs`** - Vim-like undo/redo system with intelligent change grouping
-- **`io.rs`** - File I/O operations with proper newline handling and error management
-- **`lib.rs`** - Library interface for modular architecture and comprehensive testing
+### ⚡ Advanced Features
+- **Undo/Redo**: Complete history tracking with `u` and `Ctrl+R`
+- **Count Prefixes**: Numeric multipliers for commands (`5j`, `3dd`, etc.)
+- **Operator-Motion**: Combine operators with motions (`d3w`, `y5j`)
+- **Status Line**: File info, mode display, and cursor position
+- **Error Handling**: Comprehensive error messages and recovery
 
-### Design Principles
+## Installation
 
-1. **Modular Architecture**: Each component has clear responsibilities
-2. **Raw Terminal Control**: Direct ANSI escape sequence usage for learning
-3. **Safety**: Rust's ownership system ensures memory safety
-4. **Extensibility**: Trait-based design allows for future improvements
+### Prerequisites
+- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
 
-## Current Status: Production-Ready Vim-like Editor
-
-✅ **Completed Features:**
-- **Project Foundation**: Cargo setup, Git repository, comprehensive modular architecture
-- **Terminal Control**: Raw mode implementation with RAII guard pattern and full escape sequence support
-- **Input Handling**: Complete keystroke reading, escape sequence parsing, and special key support
-- **Text Buffer**: Unicode-safe editing with efficient line operations and newline preservation
-- **Screen Rendering**: Full file display with viewport scrolling, status line, and search highlighting
-- **Modal Editing**: Complete Normal/Insert/Command/Search mode implementation with proper transitions
-- **Cursor Navigation**: Full Vim-style movement (hjkl, arrows, 0$, gg/G, w/b/e, f/F/t/T)
-- **Text Editing**: Character insertion, deletion (x), line operations (o/O, dd), advanced editing commands
-- **File Operations**: Complete file I/O with load, save (:w), save-as, new file creation (:e), and change detection
-- **Command System**: Full Ex-command implementation (:w, :q, :wq, :q!, :e) with proper error handling
-- **Delete Operations**: Character (x), line (dd), and motion-based deletion with register support
-- **Word Motion**: Complete word navigation (w, b, e) and text object movements
-- **Yank/Paste System**: Copy (yy, yw) and paste (p, P) with proper register management
-- **Undo/Redo System**: Complete vim-like undo (u) and redo (Ctrl-R) with cursor position restoration
-- **Insert Mode Grouping**: Intelligent change grouping for natural undo behavior
-- **Search Functionality**: Pattern search (/) and reverse search (?) with next/previous (n/N), highlighting, and wrap-around
-- **Error Handling**: Comprehensive error management with Vim-style error messages and recovery
-- **Testing Suite**: 45+ comprehensive tests covering all functionality and edge cases
-
-🎯 **Current Capabilities:**
-- Full vim-like editing experience with all essential commands
-- Load files: `cargo run filename.txt` with proper error handling
-- Modal editing with seamless mode transitions (Normal ↔ Insert ↔ Command ↔ Search)
-- Complete file operations with change detection and newline preservation  
-- Advanced text manipulation with operator-motion combinations
-- Copy/paste operations with proper register handling and line/character modes
-- Full undo/redo support with vim-like behavior and cursor restoration
-- Search through buffer with pattern highlighting and wrap-around navigation
-- Professional status line with file info, mode display, and cursor position
-- Comprehensive error handling and user feedback
-
-� **Future Extensions:**
-- Visual mode and advanced text selection
-- Multiple buffers and buffer switching  
-- Configuration and settings system
-- Syntax highlighting and language-aware features
-- Plugin system and extensibility
-- Advanced search with regular expressions
-
-## Documentation
-
-For detailed implementation and technical details, see:
-
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture and design overview
-- **[docs/daily-summaries/](docs/daily-summaries/)** - Day-by-day implementation progress logs
-
-## Building and Running
-
+### Build from Source
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd rustvim
+cargo build --release
+```
 
-# Build the project
-cargo build
-
-# Run the editor (empty buffer)
+### Run
+```bash
+# Start with empty buffer
 cargo run
 
-# Load and edit a specific file
+# Load a specific file
 cargo run filename.txt
 
-# Run comprehensive test suite
-cargo test
-
-# Run integration tests
-cargo test --test integration_tests
+# Or run the built binary
+./target/release/rustvim [filename]
 ```
 
 ## Usage
 
-### Basic Operation
-- **File Loading**: `cargo run README.md` to open any text file
-- **Modal Editing**: Switch between Normal mode (navigation) and Insert mode (editing)
-- **Navigation**: Use `hjkl` or arrow keys, `0`/`$` for line start/end, `gg`/`G` for file start/end
-- **Editing**: Press `i` to enter Insert mode, type text, press `ESC` to return to Normal mode
-- **File Operations**: `:w` to save, `:q` to quit, `:wq` to save and quit, `:e filename` to edit new file
-- **Advanced**: Word navigation (`w`, `b`, `e`), deletion (`x`, `dd`), copy/paste (`yy`, `p`)
-- **Search**: Press `/` to search forward, `?` to search backward, `n` for next match, `N` for previous
-- **Undo/Redo**: Use `u` to undo changes, `Ctrl-R` to redo
+### Basic Commands
 
-### Vim Commands Supported
+#### Mode Switching
+| Key | Action |
+|-----|--------|
+| `ESC` | Return to Normal mode |
+| `i` | Enter Insert mode |
+| `v` | Enter Visual mode (character-wise) |
+| `V` | Enter Visual Line mode |
+| `Ctrl+V` | Enter Visual Block mode |
+| `:` | Enter Command mode |
+| `/` | Enter Search mode |
+
+#### Navigation
+| Key | Action |
+|-----|--------|
+| `h/j/k/l` | Move left/down/up/right |
+| `w/b` | Word forward/backward |
+| `0` | Beginning of line |
+| `$` | End of line |
+| `gg` | Go to first line |
+| `G` | Go to last line |
+
+#### Text Operations
+| Key | Action |
+|-----|--------|
+| `o/O` | Insert new line below/above |
+| `dd` | Delete current line |
+| `yy` | Yank (copy) current line |
+| `p` | Paste after cursor |
+| `u` | Undo |
+| `Ctrl+R` | Redo |
+
+### Visual Mode Operations
+
+#### Character-wise Selection (`v`)
 ```
-Navigation:     h j k l (arrows), 0 $ gg G, w b e
-Insert modes:   i a A o O
-Edit:           x (delete char), dd (delete line), o O (new lines)
-Copy/Paste:     yy yw (yank), p P (paste)
-Search:         / (forward), ? (backward), n (next), N (previous)
-File Ops:       :w (save), :q (quit), :wq (save+quit), :e (edit file)
-Undo/Redo:      u (undo), Ctrl-R (redo)
-Mode Switch:    ESC (to normal), i a A o O (to insert), : (to command), / ? (to search)
+v           # Start selection
+<movement>  # Extend selection
+d           # Delete selected text
+y           # Copy selected text
+ESC         # Exit visual mode
 ```
 
-## Module Documentation
+#### Line-wise Selection (`V`)
+```
+V           # Start line selection
+<movement>  # Extend to full lines
+d           # Delete selected lines
+y           # Copy selected lines
+```
 
-### Buffer Module (`buffer.rs`)
+#### Block Selection (`Ctrl+V`)
+```
+Ctrl+V      # Start block selection
+<movement>  # Create rectangular selection
+d           # Delete block
+y           # Copy block
+ESC         # Exit visual mode
+```
 
-The text buffer uses a simple `Vec<String>` approach where each string represents a line. This provides:
+### File Commands
+| Command | Action |
+|---------|--------|
+| `:w` | Save current file |
+| `:w filename` | Save as filename |
+| `:q` | Quit (with change detection) |
+| `:q!` | Force quit (discard changes) |
+| `:wq` | Save and quit |
+| `:e filename` | Edit new file |
 
-- **Simple line operations**: Easy to insert/delete entire lines
-- **Bounds safety**: All operations include bounds checking
-- **Future extensibility**: Trait-based design allows for buffer implementation swapping
+### Search Operations
+| Command | Action |
+|---------|--------|
+| `/pattern` | Search forward |
+| `?pattern` | Search backward |
+| `n` | Next match |
+| `N` | Previous match |
+| `ESC` | Exit search |
 
-Key operations:
-- `insert_char(pos, ch)` - Insert character at position
-- `delete_char(pos)` - Delete character at position
-- `insert_newline(pos)` - Split line at position
-- Line merging when deleting newlines
+## Examples
 
-### Editor Module (`editor.rs`)
+### Basic Editing Workflow
+```bash
+# Open a file
+cargo run example.txt
 
-Central coordinator that manages:
-- Current editing mode (Normal/Insert/Command/Visual)
-- Cursor position and viewport scrolling
-- Integration between buffer, terminal, and input
-- Overall application state
+# Navigate to a word and enter visual mode
+w v 3w    # Select 3 words
 
-### Terminal Module (`terminal.rs`)
+# Copy the selection
+y
 
-Handles low-level terminal operations using POSIX termios:
-- **Raw mode implementation** with complete termios configuration
-- **RAII guard pattern** for automatic terminal restoration
-- **ANSI escape sequence generation** for screen control
-- **Screen clearing and cursor positioning** 
-- **Safe cleanup** even on program panic or crash
+# Move somewhere else and paste
+G p
 
-### Input Module (`input.rs`)
+# Save and quit
+:wq
+```
 
-Processes raw keyboard input:
-- Single byte reading from stdin
-- Escape sequence parsing for special keys
-- Key classification and enumeration
-- Multi-byte sequence handling
+### Visual Block Operations
+```bash
+# Select a rectangular block
+Ctrl+V    # Enter visual block mode
+3j 5l     # Select 4 rows × 6 columns
 
-### Commands Module (`commands.rs`)
+# Delete the block
+d         # Removes rectangular selection
 
-Implements the complete command system:
-- **Normal mode commands**: Navigation (hjkl, 0$, ggG), deletion (x, dd), yank (yy, yw)
-- **Insert mode commands**: Text insertion, line operations, cursor movement
-- **Operator-pending mode**: Delete/yank with motion commands (dw, d$, y0)
-- **Mode switching**: Seamless transitions between Normal and Insert modes
-- **Command execution**: Integrated with editor state and undo system
+# Undo the entire operation
+u         # Restores the complete block
+```
 
-### History Module (`history.rs`)
+### Multi-file Editing
+```bash
+# Open multiple files
+cargo run file1.txt file2.txt
 
-Provides vim-like undo/redo functionality:
-- **Action tracking**: Records all text modifications with position information
-- **Change grouping**: Groups insert mode sessions as single undo actions
-- **Efficient storage**: Memory-bounded history with configurable limits
-- **Cursor restoration**: Maintains cursor position across undo/redo operations
-- **Integration**: Seamlessly works with all editing operations
+# Edit first file
+i "Hello World" ESC
 
-## Learning Objectives
+# Switch to second file
+:bn
 
-This project demonstrates practical implementation of:
+# Make changes and save both
+:w
+:bp
+:w
+```
 
-1. **Systems Programming**: Raw terminal control, POSIX APIs, and low-level I/O
-2. **Rust Language Features**: Ownership, borrowing, pattern matching, traits, and RAII
-3. **Software Architecture**: Modular design, separation of concerns, and clean interfaces
-4. **Text Editor Internals**: Buffer management, modal editing, command parsing, and undo systems
-5. **UNIX Programming**: Terminal control, escape sequences, and signal handling
-6. **Testing Strategies**: Unit testing, integration testing, and interactive validation
+## Architecture
 
-## Project Highlights
+### Project Structure
+```
+src/
+├── main.rs              # Application entry point
+├── lib.rs              # Module exports  
+├── editor.rs           # Core editor state and event loop
+├── buffer.rs           # Text buffer management
+├── terminal.rs         # Terminal control and rendering
+├── input.rs            # Key input handling
+├── commands.rs         # Command processing
+├── keymap.rs           # Key mapping system
+├── io.rs              # File I/O operations
+└── history.rs          # Undo/redo system
 
-### Technical Achievements
-- **Zero-dependency core**: Raw terminal control without external crates
-- **Memory safe**: 100% safe Rust with comprehensive bounds checking
-- **Vim-compatible**: Behavior closely matches Vim for supported commands
-- **Robust architecture**: Clean module separation with extensive testing
-- **Educational value**: Well-documented code perfect for learning systems programming
+tests/                   # Comprehensive test suite
+├── visual_block_mode_tests.rs
+├── visual_mode_tests.rs
+├── buffer_tests.rs
+└── ... (148+ tests)
+```
 
-### Real-world Applicability
-- **Production patterns**: RAII guards, error handling, and resource management
-- **Performance considerations**: Efficient data structures and minimal allocations
-- **User experience**: Responsive interface with immediate visual feedback
-- **Maintainability**: Modular design supports easy feature additions
+### Key Design Principles
+- **Modal Architecture**: Clean separation between editing modes
+- **Composable Commands**: Operators combine with motions naturally
+- **Memory Safety**: Rust's ownership system prevents common editor bugs
+- **Comprehensive Testing**: 148+ tests ensure reliability
+- **Vim Compatibility**: Faithful reproduction of vim behavior
 
-## Testing Strategy
+## Testing
 
-The project includes comprehensive testing for all functionality:
+Run the comprehensive test suite:
 
 ```bash
-# Run all tests (unit + integration)
+# Run all tests
 cargo test
 
-# Run specific module tests
-cargo test buffer
-cargo test editor
-cargo test history
-
-# Run integration tests only
+# Run specific test categories
+cargo test --test visual_block_mode_tests
+cargo test --test buffer_tests
 cargo test --test integration_tests
 
-# Test interactive functionality
-cargo run README.md  # Load this file and try editing
+# Run with output
+cargo test -- --nocapture
 ```
 
-### Test Coverage
-- **Unit Tests**: Core functionality in buffer, terminal, input, history, and I/O modules
-- **Integration Tests**: Real module interactions and complete workflow testing
-- **File I/O Tests**: Newline preservation, file operations, and edge cases
-- **Command Tests**: Ex-command system with error handling and validation
-- **Search Tests**: Pattern matching, highlighting, and navigation
-- **History Tests**: Undo/redo system integrity and cursor restoration
-- **Manual Testing**: Interactive editing scenarios and real-world usage
-- **Regression Testing**: Ensures new features don't break existing functionality
+## Performance
 
-Total: **45+ comprehensive tests** covering all functionality and edge cases.
+- **Efficient Text Storage**: Line-based representation for O(1) line access
+- **Minimal Allocations**: Careful memory management for responsiveness  
+- **Non-blocking Input**: Immediate feedback on all operations
+- **Composite Operations**: Complex operations (like block delete) execute atomically
 
 ## Contributing
 
-This is a production-ready vim-like text editor that demonstrates modern Rust development practices. The codebase is well-structured and thoroughly tested, making it an excellent reference for:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Write tests for your changes
+4. Ensure all tests pass (`cargo test`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
-- Systems programming in Rust
-- Terminal application development
-- Text editor implementation
-- Modal editing systems
-- Clean architecture design
+### Development Guidelines
+- Follow Rust naming conventions
+- Add tests for new functionality
+- Update documentation for user-facing changes
+- Ensure `cargo clippy` passes without warnings
 
-Feel free to use, study, and extend this editor for your own projects or learning purposes.
+## Roadmap
+
+### Completed ✅
+- [x] Modal editing (Normal, Insert, Command, Search)
+- [x] Visual selection (character, line, block)
+- [x] File operations and multi-file support
+- [x] Undo/redo system with composite operations
+- [x] Search and navigation
+- [x] Comprehensive test coverage
+
+### Planned 🚧
+- [ ] Syntax highlighting
+- [ ] Configuration system
+- [ ] Plugin architecture
+- [ ] Regular expression search
+- [ ] Multiple windows/splits
+- [ ] Improved performance optimizations
+
+## Documentation
+
+For detailed implementation and technical details, see:
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture and design overview
+- **[docs/daily-summaries/](docs/daily-summaries/)** - Day-by-day implementation progress logs
 
 ## License
 
-This project is created for educational purposes. Feel free to use and modify as needed for learning.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by Vim and its philosophy of modal editing
+- Built with Rust for memory safety and performance
+- Terminal interface uses standard ANSI escape sequences for broad compatibility
 
 ## Resources and References
 
