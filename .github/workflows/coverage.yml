@@ -2,7 +2,7 @@ name: Code Coverage
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -40,66 +40,38 @@ jobs:
     - name: Run tests with coverage
       run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       
-    - name: Generate coverage summary
-      run: |
-        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        cargo llvm-cov --summary-only --all-features --workspace >> coverage_summary.txt
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        cat coverage_summary.txt >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      id: codecov_upload
+      uses: codecov/codecov-action@v5
       with:
-        file: lcov.info
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: true
         
-    - name: Archive coverage artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: |
-          lcov.info
-          coverage_summary.txt
-          
-    - name: Comment coverage on PR
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const fs = require('fs');
-          
-          if (fs.existsSync('coverage_summary.txt')) {
-            const coverage = fs.readFileSync('coverage_summary.txt', 'utf8');
-            
-            const body = `## 📊 Coverage Report
-            
-            \`\`\`
-            ${coverage}
-            \`\`\`
-            
-            📈 Full coverage details available in the [Codecov report](https://codecov.io/gh/${{ github.repository }}/pull/${{ github.event.number }})
-            `;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-          }
-          
-    - name: Display coverage summary
-      if: github.event_name != 'pull_request'
+    - name: Post Coverage Report Summary  
+      if: always()
       run: |
-        echo "📊 Code Coverage Summary"
-        echo "========================="
-        if [ -f coverage_summary.txt ]; then
-          cat coverage_summary.txt
-          echo ""
+        echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.codecov_upload.outcome }}" = "success" ]; then
+          echo "✅ Coverage uploaded successfully!"
+          echo "### ✅ Coverage Upload Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REPORT_URL="https://codecov.io/gh/zangjiucheng/rustvim/pull/${{ github.event.pull_request.number }}"
+            echo "🔗 View full report at: $REPORT_URL"
+            echo "📋 **Pull Request Coverage Report**" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 [View detailed coverage report]($REPORT_URL)" >> $GITHUB_STEP_SUMMARY
+          else
+            REPORT_URL="https://codecov.io/gh/zangjiucheng/rustvim"
+            echo "🔗 View full report at: $REPORT_URL"
+            echo "📋 **Branch Coverage Report**" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 [View detailed coverage report]($REPORT_URL)" >> $GITHUB_STEP_SUMMARY
+          fi
         else
-          echo "❌ Coverage summary file not found"
+          echo "❌ Coverage test wrong"
+          echo "### ❌ Coverage Upload Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The coverage upload to Codecov failed. Please check the logs above for details." >> $GITHUB_STEP_SUMMARY
         fi
