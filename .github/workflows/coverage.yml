@@ -55,7 +55,7 @@ jobs:
         file: lcov.info
         flags: unittests
         name: codecov-umbrella
-        fail_ci_if_error: false
+        fail_ci_if_error: true
         
     - name: Archive coverage artifacts
       uses: actions/upload-artifact@v4
@@ -64,33 +64,6 @@ jobs:
         path: |
           lcov.info
           coverage_summary.txt
-          
-    - name: Comment coverage on PR
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const fs = require('fs');
-          
-          if (fs.existsSync('coverage_summary.txt')) {
-            const coverage = fs.readFileSync('coverage_summary.txt', 'utf8');
-            
-            const body = `## 📊 Coverage Report
-            
-            \`\`\`
-            ${coverage}
-            \`\`\`
-            
-            📈 Full coverage details available in the [Codecov report](https://codecov.io/gh/${{ github.repository }}/pull/${{ github.event.number }})
-            `;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-          }
           
     - name: Display coverage summary
       if: github.event_name != 'pull_request'
