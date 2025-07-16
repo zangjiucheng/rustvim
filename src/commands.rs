@@ -102,9 +102,7 @@ impl Motion for MovementCommand {
         for _ in 0..count {
             match self {
                 MovementCommand::Left => {
-                    if temp_col > 0 {
-                        temp_col -= 1;
-                    }
+                    temp_col = temp_col.saturating_sub(1);
                 }
                 MovementCommand::Right => {
                     let line_len = editor.buffer().line_length(temp_row);
@@ -680,6 +678,7 @@ impl MotionCalculator {
     }
 
     /// Move cursor to the beginning of the next word (w command)
+    #[allow(clippy::while_let_loop)]
     pub fn word_forward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
@@ -740,6 +739,7 @@ impl MotionCalculator {
     }
 
     /// Move cursor to the beginning of the previous word (b command)  
+    #[allow(clippy::while_let_loop)]
     pub fn word_backward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
@@ -810,6 +810,7 @@ impl MotionCalculator {
     }
 
     /// Move cursor to the end of the current/next word (e command)
+    #[allow(clippy::while_let_loop)]
     pub fn word_end(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
@@ -919,6 +920,7 @@ impl TextOperations {
                 (end_row, end_col, start_row, start_col)
             };
 
+        #[allow(clippy::comparison_chain)]
         if from_row == to_row {
             if from_col < to_col {
                 for _ in from_col..to_col {
@@ -935,53 +937,51 @@ impl TextOperations {
                     }
                 }
             }
+        } else if from_row < to_row {
+            let start_line_len = editor.buffer().line_length(from_row);
+            for _ in from_col..start_line_len {
+                if from_col < editor.buffer().line_length(from_row) {
+                    let pos = crate::buffer::Position::new(from_row, from_col);
+                    editor.buffer_mut().delete_char(pos);
+                }
+            }
+
+            for row in (from_row + 1..to_row).rev() {
+                Self::delete_line_at(editor, row);
+            }
+
+            let adjusted_end_row = from_row + 1;
+            if adjusted_end_row < editor.buffer().line_count() {
+                for _ in 0..to_col {
+                    if 0 < editor.buffer().line_length(adjusted_end_row) {
+                        let pos = crate::buffer::Position::new(adjusted_end_row, 0);
+                        editor.buffer_mut().delete_char(pos);
+                    }
+                }
+
+                if let Some(remaining_text) = editor.buffer().get_line(adjusted_end_row) {
+                    let remaining = remaining_text.clone();
+                    Self::delete_line_at(editor, adjusted_end_row);
+
+                    for ch in remaining.chars() {
+                        let pos = crate::buffer::Position::new(
+                            from_row,
+                            editor.buffer().line_length(from_row),
+                        );
+                        editor.buffer_mut().insert_char(pos, ch);
+                    }
+                }
+            }
         } else {
-            if from_row < to_row {
-                let start_line_len = editor.buffer().line_length(from_row);
-                for _ in from_col..start_line_len {
-                    if from_col < editor.buffer().line_length(from_row) {
-                        let pos = crate::buffer::Position::new(from_row, from_col);
-                        editor.buffer_mut().delete_char(pos);
-                    }
+            for _ in 0..from_col {
+                if 0 < editor.buffer().line_length(from_row) {
+                    let pos = crate::buffer::Position::new(from_row, 0);
+                    editor.buffer_mut().delete_char(pos);
                 }
+            }
 
-                for row in (from_row + 1..to_row).rev() {
-                    Self::delete_line_at(editor, row);
-                }
-
-                let adjusted_end_row = from_row + 1;
-                if adjusted_end_row < editor.buffer().line_count() {
-                    for _ in 0..to_col {
-                        if 0 < editor.buffer().line_length(adjusted_end_row) {
-                            let pos = crate::buffer::Position::new(adjusted_end_row, 0);
-                            editor.buffer_mut().delete_char(pos);
-                        }
-                    }
-
-                    if let Some(remaining_text) = editor.buffer().get_line(adjusted_end_row) {
-                        let remaining = remaining_text.clone();
-                        Self::delete_line_at(editor, adjusted_end_row);
-
-                        for ch in remaining.chars() {
-                            let pos = crate::buffer::Position::new(
-                                from_row,
-                                editor.buffer().line_length(from_row),
-                            );
-                            editor.buffer_mut().insert_char(pos, ch);
-                        }
-                    }
-                }
-            } else {
-                for _ in 0..from_col {
-                    if 0 < editor.buffer().line_length(from_row) {
-                        let pos = crate::buffer::Position::new(from_row, 0);
-                        editor.buffer_mut().delete_char(pos);
-                    }
-                }
-
-                for row in (to_row..from_row).rev() {
-                    Self::delete_line_at(editor, row);
-                }
+            for row in (to_row..from_row).rev() {
+                Self::delete_line_at(editor, row);
             }
         }
     }
@@ -1323,7 +1323,7 @@ impl OperatorExecutor {
             }
 
             // Move cursor to the start of the first inserted line
-            if lines.len() > 0 {
+            if !lines.is_empty() {
                 editor.cursor_mut().row += 1;
                 editor.cursor_mut().col = 0;
 

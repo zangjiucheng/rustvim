@@ -22,6 +22,12 @@ pub struct Buffer {
     pub ends_with_newline: bool,
 }
 
+impl Default for Buffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Buffer {
     /// Create a new empty buffer
     pub fn new() -> Self {
@@ -36,10 +42,7 @@ impl Buffer {
         // Check if the original content ended with a newline
         let ends_with_newline = content.ends_with('\n');
 
-        let lines: Vec<GapBufferLine> = content
-            .lines()
-            .map(|line| GapBufferLine::from_string(line))
-            .collect();
+        let lines: Vec<GapBufferLine> = content.lines().map(GapBufferLine::from_string).collect();
 
         // Ensure at least one line exists
         let lines = if lines.is_empty() {
@@ -124,8 +127,8 @@ impl Buffer {
         }
     }
 
-    /// Convert buffer to string (for saving to file)
-    pub fn to_string(&self) -> String {
+    /// Convert buffer to string (for saving to file)  
+    pub fn content(&self) -> String {
         self.lines
             .iter()
             .map(|line| line.to_string())
@@ -268,5 +271,11 @@ impl TextBuffer for Buffer {
 
     fn get_line(&self, index: usize) -> Option<String> {
         self.get_line(index)
+    }
+}
+
+impl std::fmt::Display for Buffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.content())
     }
 }

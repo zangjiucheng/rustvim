@@ -36,6 +36,12 @@ impl Cursor {
     }
 }
 
+impl Default for Cursor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Information about a single buffer
 pub struct BufferInfo {
     /// The buffer contents
@@ -142,18 +148,29 @@ impl Register {
     }
 }
 
+impl Default for Register {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for Editor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Editor {
     /// Create a new editor instance
     pub fn new() -> Self {
-        let mut buffers = Vec::new();
-        buffers.push(BufferInfo {
+        let buffers = vec![BufferInfo {
             buffer: Buffer::new(),
             filename: None,
             modified: false,
             cursor: Cursor::new(),
             scroll_offset: 0,
             history: History::new(),
-        });
+        }];
 
         Self {
             mode: Mode::Normal,
@@ -199,44 +216,41 @@ impl Editor {
             }
 
             // Handle global commands first
-            match &key {
-                crate::input::Key::Esc => {
-                    match self.mode {
-                        Mode::Insert => {
-                            // Exit insert mode, move cursor left if possible
-                            self.end_insert_mode();
-                            self.mode = Mode::Normal;
-                            if self.cursor().col > 0 {
-                                self.cursor_mut().col -= 1;
-                            }
-                        }
-                        Mode::Search => {
-                            // Cancel search and return to normal mode
-                            self.mode = Mode::Normal;
-                            self.search_input.clear();
-                            self.search_match = None;
-                        }
-                        Mode::Command => {
-                            // Cancel command and return to normal mode
-                            self.mode = Mode::Normal;
-                            self.command_input.clear();
-                        }
-                        Mode::Visual => {
-                            // Exit visual mode when escape is pressed
-                            self.exit_visual_mode();
-                        }
-                        Mode::Normal => {
-                            // In normal mode, ESC does nothing (Vim behavior)
-                            // Could clear status messages or pending operations
-                            self.clear_status_message();
-                            self.pending_count = None;
-                            self.pending_operator = None;
+            if key == crate::input::Key::Esc {
+                match self.mode {
+                    Mode::Insert => {
+                        // Exit insert mode, move cursor left if possible
+                        self.end_insert_mode();
+                        self.mode = Mode::Normal;
+                        if self.cursor().col > 0 {
+                            self.cursor_mut().col -= 1;
                         }
                     }
-                    self.refresh_screen()?;
-                    continue;
+                    Mode::Search => {
+                        // Cancel search and return to normal mode
+                        self.mode = Mode::Normal;
+                        self.search_input.clear();
+                        self.search_match = None;
+                    }
+                    Mode::Command => {
+                        // Cancel command and return to normal mode
+                        self.mode = Mode::Normal;
+                        self.command_input.clear();
+                    }
+                    Mode::Visual => {
+                        // Exit visual mode when escape is pressed
+                        self.exit_visual_mode();
+                    }
+                    Mode::Normal => {
+                        // In normal mode, ESC does nothing (Vim behavior)
+                        // Could clear status messages or pending operations
+                        self.clear_status_message();
+                        self.pending_count = None;
+                        self.pending_operator = None;
+                    }
                 }
-                _ => {}
+                self.refresh_screen()?;
+                continue;
             }
 
             // Handle mode-specific commands using unified keymap processor

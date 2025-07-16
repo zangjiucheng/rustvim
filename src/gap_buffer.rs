@@ -79,36 +79,42 @@ impl GapBufferLine {
         let logical_len = self.len();
         let pos = pos.min(logical_len);
 
-        if pos < self.gap_start {
-            // Move gap left: move characters from before gap to after gap
-            let move_count = self.gap_start - pos;
-            let src_start = pos;
-            let dst_start = self.gap_end - move_count;
+        use std::cmp::Ordering;
+        match pos.cmp(&self.gap_start) {
+            Ordering::Less => {
+                // Move gap left: move characters from before gap to after gap
+                let move_count = self.gap_start - pos;
+                let src_start = pos;
+                let dst_start = self.gap_end - move_count;
 
-            // Copy characters that need to move in reverse order to avoid overwriting
-            for i in (0..move_count).rev() {
-                self.buffer[dst_start + i] = self.buffer[src_start + i];
+                // Copy characters that need to move in reverse order to avoid overwriting
+                for i in (0..move_count).rev() {
+                    self.buffer[dst_start + i] = self.buffer[src_start + i];
+                }
+
+                // Update gap boundaries
+                self.gap_start = pos;
+                self.gap_end -= move_count;
             }
+            Ordering::Greater => {
+                // Move gap right: move characters from after gap to before gap
+                let move_count = pos - self.gap_start;
+                let src_start = self.gap_end;
+                let dst_start = self.gap_start;
 
-            // Update gap boundaries
-            self.gap_start = pos;
-            self.gap_end -= move_count;
-        } else if pos > self.gap_start {
-            // Move gap right: move characters from after gap to before gap
-            let move_count = pos - self.gap_start;
-            let src_start = self.gap_end;
-            let dst_start = self.gap_start;
+                // Copy characters that need to move
+                for i in 0..move_count {
+                    self.buffer[dst_start + i] = self.buffer[src_start + i];
+                }
 
-            // Copy characters that need to move
-            for i in 0..move_count {
-                self.buffer[dst_start + i] = self.buffer[src_start + i];
+                // Update gap boundaries
+                self.gap_start = pos;
+                self.gap_end += move_count;
             }
-
-            // Update gap boundaries
-            self.gap_start = pos;
-            self.gap_end += move_count;
+            Ordering::Equal => {
+                // If pos == gap_start, no movement needed
+            }
         }
-        // If pos == gap_start, no movement needed
     }
 
     /// Ensure the gap has at least the specified size
@@ -192,7 +198,7 @@ impl GapBufferLine {
     }
 
     /// Convert the gap buffer to a string
-    pub fn to_string(&self) -> String {
+    pub fn content(&self) -> String {
         let mut result = String::with_capacity(self.len());
 
         // Add characters before gap
@@ -286,14 +292,14 @@ impl Default for GapBufferLine {
 
 impl fmt::Display for GapBufferLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.content())
     }
 }
 
 impl fmt::Debug for GapBufferLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GapBufferLine")
-            .field("content", &self.to_string())
+            .field("content", &self.content())
             .field("gap_start", &self.gap_start)
             .field("gap_end", &self.gap_end)
             .field("logical_length", &self.len())

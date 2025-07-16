@@ -27,12 +27,9 @@ mod visual_mode_tests {
     fn simulate_key(editor: &mut Editor, key: Key) {
         // Handle Escape key specially like the main editor loop does
         if let Key::Esc = key {
-            match editor.mode {
-                Mode::Visual => {
-                    editor.exit_visual_mode();
-                    return;
-                }
-                _ => {}
+            if editor.mode == Mode::Visual {
+                editor.exit_visual_mode();
+                return;
             }
         }
         let _ = editor.handle_keymap_input(&key);

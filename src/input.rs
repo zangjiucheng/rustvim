@@ -224,6 +224,12 @@ impl InputHandler {
     }
 }
 
+impl Default for InputHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Helper functions for key classification
 impl Key {
     /// Check if this is a printable character

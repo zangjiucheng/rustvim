@@ -62,6 +62,12 @@ pub struct History {
     max_undo_levels: usize,
 }
 
+impl Default for History {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl History {
     /// Create a new history manager
     pub fn new() -> Self {
@@ -295,10 +301,9 @@ impl History {
         text: &str,
     ) {
         if text.contains('\n') {
-            if text.starts_with('\n') {
+            if let Some(text_after_newline) = text.strip_prefix('\n') {
                 // This could be either "O" command (newline at beginning) or "o" command (newline at end)
                 // Format: "\nSomeText" or just "\n"
-                let text_after_newline = &text[1..]; // Remove the leading newline
 
                 if pos.col == 0 {
                     // "O" command case: newline at beginning pushes content down
@@ -417,10 +422,9 @@ impl History {
         text: &str,
     ) {
         if text.contains('\n') {
-            if text.starts_with('\n') {
+            if let Some(text_after_newline) = text.strip_prefix('\n') {
                 // This could be either "O" command (newline at beginning) or "o" command (newline at end)
                 // Format: "\nSomeText" or just "\n"
-                let text_after_newline = &text[1..]; // Remove the leading newline
 
                 // For "O" command: newline inserted at beginning (start_pos = (row, 0))
                 // For "o" command: newline inserted at end (start_pos = (row, line_end))

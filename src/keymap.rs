@@ -765,14 +765,10 @@ impl KeymapProcessor {
                     // 'dd' - delete line
                     EditCommand::DeleteLine.execute(editor)?;
                     Ok(true)
-                } else if let Some(action) = self.keymap.lookup(Mode::Normal, key) {
-                    if let Action::Move(movement) = action {
-                        // Delete from cursor to end of movement
-                        self.execute_delete_motion(editor, movement.clone())?;
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
+                } else if let Some(Action::Move(movement)) = self.keymap.lookup(Mode::Normal, key) {
+                    // Delete from cursor to end of movement
+                    self.execute_delete_motion(editor, movement.clone())?;
+                    Ok(true)
                 } else {
                     Ok(false)
                 }
@@ -783,14 +779,10 @@ impl KeymapProcessor {
                     // 'yy' - yank line
                     EditCommand::YankLine.execute(editor)?;
                     Ok(true)
-                } else if let Some(action) = self.keymap.lookup(Mode::Normal, key) {
-                    if let Action::Move(movement) = action {
-                        // Yank from cursor to end of movement
-                        self.execute_yank_motion(editor, movement.clone())?;
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
+                } else if let Some(Action::Move(movement)) = self.keymap.lookup(Mode::Normal, key) {
+                    // Yank from cursor to end of movement
+                    self.execute_yank_motion(editor, movement.clone())?;
+                    Ok(true)
                 } else {
                     Ok(false)
                 }
@@ -1052,10 +1044,8 @@ impl Default for KeymapProcessor {
 // Configuration Builder Pattern
 // ============================================================================
 
-/// Global keymap configuration helpers and builders
-impl KeymapConfig {
-    /// Create a default configuration
-    pub fn default() -> Self {
+impl Default for KeymapConfig {
+    fn default() -> Self {
         Self {
             normal: Keymap::default_normal_keymap(),
             insert: Keymap::default_insert_keymap(),
@@ -1063,6 +1053,14 @@ impl KeymapConfig {
             command: Keymap::default_command_keymap(),
             search: Keymap::default_search_keymap(),
         }
+    }
+}
+
+/// Global keymap configuration helpers and builders
+impl KeymapConfig {
+    /// Create a default configuration  
+    pub fn create_default() -> Self {
+        Self::default()
     }
 
     /// Create an empty configuration

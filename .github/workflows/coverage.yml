@@ -68,7 +68,7 @@ jobs:
           coverage_summary.txt
           
     - name: Comment coverage on PR
-      if: github.event_name == 'pull_request'
+      # if: github.event_name == 'pull_request'
       uses: actions/github-script@v6
       with:
         script: |

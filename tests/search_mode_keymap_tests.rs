@@ -7,9 +7,9 @@ fn test_search_mode_keymap_default() {
     let search_keymap = Keymap::default_search_keymap();
 
     // Check that basic search keys are bound
-    assert!(search_keymap.get(&Key::Enter).is_some());
-    assert!(search_keymap.get(&Key::Backspace).is_some());
-    assert!(search_keymap.get(&Key::Esc).is_some());
+    assert!(search_keymap.contains_key(&Key::Enter));
+    assert!(search_keymap.contains_key(&Key::Backspace));
+    assert!(search_keymap.contains_key(&Key::Esc));
 
     // Verify the correct actions
     if let Some(action) = search_keymap.get(&Key::Enter) {

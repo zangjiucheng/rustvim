@@ -136,6 +136,12 @@ impl Terminal {
     }
 }
 
+impl Default for Terminal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// RAII guard for raw mode - ensures terminal is restored on drop
 pub struct RawModeGuard {
     /// Original terminal attributes for restoration
