@@ -1,0 +1,163 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes'
+        required: false
+        type: string
+        default: 'New release'
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@1.83.0
+      with:
+        components: rustfmt, clippy
+      
+    - name: Cache cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+      
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+      
+    - name: Run tests
+      run: cargo test --all-features
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: linux
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            artifact_suffix: windows
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            artifact_suffix: macos
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@1.83.0
+
+    - name: Build in release mode
+      run: cargo build --release
+
+    - name: Archive binary
+      shell: bash
+      run: |
+        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
+                     | jq -r '.packages[0].name')
+        BIN_PATH="target/release/$CRATE_NAME"
+        ARCHIVE="${CRATE_NAME}-${{ inputs.version }}-${{ matrix.artifact_suffix }}.zip"
+        
+        # Add executable extension for Windows
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          BIN_PATH="${BIN_PATH}.exe"
+        fi
+        
+        7z a "$ARCHIVE" "$BIN_PATH"
+        echo "Created $ARCHIVE"
+        echo "ARCHIVE_NAME=$ARCHIVE" >> $GITHUB_ENV
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_suffix }}-binary
+        path: ${{ env.ARCHIVE_NAME }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+      
+    - name: Display artifact structure
+      run: find artifacts -type f -name "*.zip" | head -20
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.version }}
+        name: RustVim ${{ inputs.version }}
+        body: |
+          ## RustVim ${{ inputs.version }}
+          
+          ${{ inputs.release_notes }}
+          
+          ### Downloads
+          
+          Choose the appropriate binary for your platform:
+          - **Linux**: `rustvim-${{ inputs.version }}-linux.zip`
+          - **Windows**: `rustvim-${{ inputs.version }}-windows.zip`
+          - **macOS**: `rustvim-${{ inputs.version }}-macos.zip`
+          
+          ### Installation
+          
+          1. Download the appropriate zip file for your platform
+          2. Extract the binary
+          3. Make it executable (Linux/macOS): `chmod +x rustvim`
+          4. Move to your PATH or run directly: `./rustvim [filename]`
+          
+          ### What's New
+          
+          See the [commit history](https://github.com/zangjiucheng/rustvim/commits/${{ inputs.version }}) for detailed changes.
+        files: artifacts/**/*.zip
+        draft: false
+        prerelease: ${{ inputs.prerelease }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Release Summary
+      run: |
+        echo "## 🚀 Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Release Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Pre-release**: ${{ inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platforms**: Linux, Windows, macOS" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+        echo "- [View Release](https://github.com/zangjiucheng/rustvim/releases/tag/${{ inputs.version }})" >> $GITHUB_STEP_SUMMARY
+        echo "- [All Releases](https://github.com/zangjiucheng/rustvim/releases)" >> $GITHUB_STEP_SUMMARY
