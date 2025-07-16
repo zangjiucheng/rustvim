@@ -492,9 +492,9 @@ impl Command for ExCommand {
             }
             ExCommand::BufferSwitch { number } => {
                 if *number > 0 && editor.switch_to_buffer(*number - 1) {
-                    editor.set_status_message(format!("Buffer {}", number));
+                    editor.set_status_message(format!("Buffer {number}"));
                 } else {
-                    editor.set_status_message(format!("E86: Buffer {} does not exist", number));
+                    editor.set_status_message(format!("E86: Buffer {number} does not exist"));
                 }
                 Ok(())
             }
@@ -506,14 +506,14 @@ impl Command for ExCommand {
             }
             ExCommand::BufferNumber { number } => {
                 if *number > 0 && editor.switch_to_buffer(*number - 1) {
-                    editor.set_status_message(format!("Buffer {}", number));
+                    editor.set_status_message(format!("Buffer {number}"));
                 } else {
-                    editor.set_status_message(format!("E86: Buffer {} does not exist", number));
+                    editor.set_status_message(format!("E86: Buffer {number} does not exist"));
                 }
                 Ok(())
             }
             ExCommand::Unknown { command } => {
-                editor.set_status_message(format!("E492: Not an editor command: {}", command));
+                editor.set_status_message(format!("E492: Not an editor command: {command}"));
                 Ok(())
             }
         }
@@ -624,7 +624,7 @@ impl ExCommandExecutor {
 
                 editor.add_buffer(buffer_info);
                 let line_count = editor.buffer().line_count();
-                editor.set_status_message(format!("\"{}\" {}L read", filename, line_count));
+                editor.set_status_message(format!("\"{filename}\" {line_count}L read"));
             }
             Err(_) => {
                 // File doesn't exist, create new empty buffer
@@ -638,7 +638,7 @@ impl ExCommandExecutor {
                 };
 
                 editor.add_buffer(buffer_info);
-                editor.set_status_message(format!("\"{}\" [New File]", filename));
+                editor.set_status_message(format!("\"{filename}\" [New File]"));
             }
         }
     }
@@ -1247,7 +1247,7 @@ impl OperatorExecutor {
             let message = if count == 1 {
                 "1 line yanked".to_string()
             } else {
-                format!("{} lines yanked", count)
+                format!("{count} lines yanked")
             };
             editor.status_msg = Some(message);
         }
@@ -1277,14 +1277,14 @@ impl OperatorExecutor {
                 if line_count <= 1 {
                     "1 line yanked".to_string()
                 } else {
-                    format!("{} lines yanked", line_count)
+                    format!("{line_count} lines yanked")
                 }
             } else {
                 let char_count = editor.register.content.len();
                 if char_count == 1 {
                     "1 character yanked".to_string()
                 } else {
-                    format!("{} characters yanked", char_count)
+                    format!("{char_count} characters yanked")
                 }
             };
             editor.status_msg = Some(message);

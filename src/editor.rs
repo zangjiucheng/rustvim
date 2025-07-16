@@ -511,8 +511,8 @@ impl Editor {
         let position = format!("{}:{}", self.cursor().row + 1, self.cursor().col + 1);
         let lines = format!("{} lines", self.buffer().line_count());
 
-        let left = format!("{}{} {} {}", filename, modified, buffer_info, mode);
-        let right = format!("{} - {}", position, lines);
+        let left = format!("{filename}{modified} {buffer_info} {mode}");
+        let right = format!("{position} - {lines}");
 
         // Calculate spacing
         let left_len = left.chars().count();
@@ -616,7 +616,7 @@ impl Editor {
             // Enhanced status message with undo count
             let remaining = current_buffer.history.undo_count();
             if remaining > 0 {
-                self.status_msg = Some(format!("Undone ({} more available)", remaining));
+                self.status_msg = Some(format!("Undone ({remaining} more available)"));
             } else {
                 self.status_msg = Some("Undone (oldest change)".to_string());
             }
@@ -640,7 +640,7 @@ impl Editor {
             // Enhanced status message with redo count
             let remaining = current_buffer.history.redo_count();
             if remaining > 0 {
-                self.status_msg = Some(format!("Redone ({} more available)", remaining));
+                self.status_msg = Some(format!("Redone ({remaining} more available)"));
             } else {
                 self.status_msg = Some("Redone (newest change)".to_string());
             }

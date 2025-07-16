@@ -39,13 +39,12 @@ impl Editor {
                 self.set_modified(false);
                 let line_count = self.buffer().line_count();
                 self.set_status_message(format!(
-                    "\"{}\" {}L, {}C written",
-                    target_filename, line_count, char_count
+                    "\"{target_filename}\" {line_count}L, {char_count}C written"
                 ));
                 true
             }
             Err(e) => {
-                self.set_status_message(format!("E212: Can't open file for writing: {}", e));
+                self.set_status_message(format!("E212: Can't open file for writing: {e}"));
                 false
             }
         }
@@ -67,7 +66,7 @@ impl Editor {
                     self.history_mut().clear(); // Clear undo history
 
                     let line_count = self.buffer().line_count();
-                    self.set_status_message(format!("\"{}\" {}L read", filename, line_count));
+                    self.set_status_message(format!("\"{filename}\" {line_count}L read"));
                 }
                 Err(_) => {
                     // File doesn't exist, create new buffer
@@ -80,7 +79,7 @@ impl Editor {
                     self.set_scroll_offset(0);
                     self.history_mut().clear();
 
-                    self.set_status_message(format!("\"{}\" [New File]", filename));
+                    self.set_status_message(format!("\"{filename}\" [New File]"));
                 }
             }
         }
@@ -188,11 +187,10 @@ impl Editor {
 
         if error_count > 0 {
             self.set_status_message(format!(
-                "{} files written, {} errors",
-                saved_count, error_count
+                "{saved_count} files written, {error_count} errors"
             ));
         } else if saved_count > 0 {
-            self.set_status_message(format!("{} files written", saved_count));
+            self.set_status_message(format!("{saved_count} files written"));
         } else {
             self.set_status_message("No files needed saving".to_string());
         }

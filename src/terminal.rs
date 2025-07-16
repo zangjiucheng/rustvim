@@ -29,8 +29,7 @@ impl Terminal {
         if result == 0 && winsize.ws_row > 0 && winsize.ws_col > 0 {
             Ok((winsize.ws_row as usize, winsize.ws_col as usize))
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
+            Err(io::Error::other(
                 "Failed to get terminal size",
             ))
         }
@@ -61,7 +60,7 @@ impl Terminal {
 
     /// Move cursor to specific position (1-based)
     pub fn move_cursor(&self, row: usize, col: usize) -> io::Result<()> {
-        print!("\x1b[{};{}H", row, col);
+        print!("\x1b[{row};{col}H");
         io::stdout().flush()
     }
 
@@ -85,14 +84,14 @@ impl Terminal {
 
     /// Write text to the terminal
     pub fn write(&self, text: &str) -> io::Result<()> {
-        print!("{}", text);
+        print!("{text}");
         io::stdout().flush()
     }
 
     /// Write a line of text with proper line ending
     pub fn write_line(&self, text: &str) -> io::Result<()> {
         // In raw mode, we need to explicitly use \r\n for line endings
-        print!("{}\r\n", text);
+        print!("{text}\r\n");
         io::stdout().flush()
     }
 
@@ -115,13 +114,13 @@ impl Terminal {
         } else {
             text.to_string()
         };
-        print!("{}", truncated);
+        print!("{truncated}");
         io::stdout().flush()
     }
 
     /// Write text with background color (for highlighting)
     pub fn write_highlighted(&self, text: &str) -> io::Result<()> {
-        print!("\x1b[7m{}\x1b[m", text); // Invert colors
+        print!("\x1b[7m{text}\x1b[m"); // Invert colors
         io::stdout().flush()
     }
 

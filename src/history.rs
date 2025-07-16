@@ -531,9 +531,9 @@ impl History {
         let redo_count = self.redo_count();
 
         match (undo_count > 0, redo_count > 0) {
-            (true, true) => format!("History: {} undo, {} redo", undo_count, redo_count),
-            (true, false) => format!("History: {} undo", undo_count),
-            (false, true) => format!("History: {} redo", redo_count),
+            (true, true) => format!("History: {undo_count} undo, {redo_count} redo"),
+            (true, false) => format!("History: {undo_count} undo"),
+            (false, true) => format!("History: {redo_count} redo"),
             (false, false) => "History: empty".to_string(),
         }
     }
