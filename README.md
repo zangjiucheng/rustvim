@@ -4,6 +4,8 @@ A comprehensive vim-like text editor implemented in Rust, featuring multiple edi
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 ![Terminal](https://img.shields.io/badge/terminal-vim--like-green?style=for-the-badge)
+[![codecov](https://codecov.io/gh/zangjiucheng/rustvim/branch/main/graph/badge.svg)](https://codecov.io/gh/zangjiucheng/rustvim)
+[![Build Status](https://github.com/zangjiucheng/rustvim/workflows/Build%20RustVim/badge.svg)](https://github.com/zangjiucheng/rustvim/actions)
 
 ## Features
 
