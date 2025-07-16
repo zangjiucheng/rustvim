@@ -2,7 +2,7 @@ name: Code Coverage
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -53,9 +53,6 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: lcov.info
-        flags: unittests
-        name: codecov-umbrella
         verbose: true
         fail_ci_if_error: true
         
