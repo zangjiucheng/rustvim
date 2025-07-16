@@ -40,37 +40,23 @@ jobs:
     - name: Run tests with coverage
       run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       
-    - name: Generate coverage summary
-      run: |
-        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        cargo llvm-cov --summary-only --all-features --workspace >> coverage_summary.txt
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        cat coverage_summary.txt >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        
     - name: Upload coverage to Codecov
+      id: codecov_upload
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        verbose: true
         fail_ci_if_error: true
         
-    - name: Archive coverage artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: |
-          coverage_summary.txt
-          
-    - name: Display coverage summary
-      if: github.event_name != 'pull_request'
+      - name: Post Coverage Report Summary  
+      if: always()
       run: |
-        echo "📊 Code Coverage Summary"
-        echo "========================="
-        if [ -f coverage_summary.txt ]; then
-          cat coverage_summary.txt
-          echo ""
+        if [ "${{ steps.codecov_upload.outcome }}" = "success" ]; then
+          echo "✅ Coverage uploaded successfully!"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "🔗 View full report at: https://codecov.io/gh/zangjiucheng/rustvim/pull/${{ github.event.pull_request.number }}"
+          else
+            echo "🔗 View full report at: https://codecov.io/gh/zangjiucheng/rustvim"
+          fi
         else
-          echo "❌ Coverage summary file not found"
+          echo "❌ Coverage test wrong"
         fi
