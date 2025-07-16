@@ -50,13 +50,28 @@ jobs:
     - name: Post Coverage Report Summary  
       if: always()
       run: |
+        echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
         if [ "${{ steps.codecov_upload.outcome }}" = "success" ]; then
           echo "✅ Coverage uploaded successfully!"
+          echo "### ✅ Coverage Upload Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "🔗 View full report at: https://codecov.io/gh/zangjiucheng/rustvim/pull/${{ github.event.pull_request.number }}"
+            REPORT_URL="https://codecov.io/gh/zangjiucheng/rustvim/pull/${{ github.event.pull_request.number }}"
+            echo "🔗 View full report at: $REPORT_URL"
+            echo "📋 **Pull Request Coverage Report**" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 [View detailed coverage report]($REPORT_URL)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "🔗 View full report at: https://codecov.io/gh/zangjiucheng/rustvim"
+            REPORT_URL="https://codecov.io/gh/zangjiucheng/rustvim"
+            echo "🔗 View full report at: $REPORT_URL"
+            echo "📋 **Branch Coverage Report**" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 [View detailed coverage report]($REPORT_URL)" >> $GITHUB_STEP_SUMMARY
           fi
         else
           echo "❌ Coverage test wrong"
+          echo "### ❌ Coverage Upload Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The coverage upload to Codecov failed. Please check the logs above for details." >> $GITHUB_STEP_SUMMARY
         fi
