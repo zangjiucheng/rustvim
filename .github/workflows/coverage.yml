@@ -47,7 +47,7 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         
-      - name: Post Coverage Report Summary  
+    - name: Post Coverage Report Summary  
       if: always()
       run: |
         if [ "${{ steps.codecov_upload.outcome }}" = "success" ]; then
