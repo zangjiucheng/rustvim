@@ -62,9 +62,6 @@ jobs:
           - os: ubuntu-latest
             artifact_suffix: linux
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            artifact_suffix: windows
-            target: x86_64-pc-windows-msvc
           - os: macos-latest
             artifact_suffix: macos
             target: x86_64-apple-darwin
@@ -86,11 +83,6 @@ jobs:
                      | jq -r '.packages[0].name')
         BIN_PATH="target/release/$CRATE_NAME"
         ARCHIVE="${CRATE_NAME}-${{ inputs.version }}-${{ matrix.artifact_suffix }}.zip"
-        
-        # Add executable extension for Windows
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          BIN_PATH="${BIN_PATH}.exe"
-        fi
         
         7z a "$ARCHIVE" "$BIN_PATH"
         echo "Created $ARCHIVE"
@@ -129,7 +121,6 @@ jobs:
           
           Choose the appropriate binary for your platform:
           - **Linux**: `rustvim-${{ inputs.version }}-linux.zip`
-          - **Windows**: `rustvim-${{ inputs.version }}-windows.zip`
           - **macOS**: `rustvim-${{ inputs.version }}-macos.zip`
           
           ### Installation
@@ -156,7 +147,7 @@ jobs:
         echo "### 📦 Release Details" >> $GITHUB_STEP_SUMMARY
         echo "- **Version**: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Pre-release**: ${{ inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: Linux, Windows, macOS" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platforms**: Linux, macOS" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
         echo "- [View Release](https://github.com/zangjiucheng/rustvim/releases/tag/${{ inputs.version }})" >> $GITHUB_STEP_SUMMARY
