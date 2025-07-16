@@ -29,9 +29,7 @@ impl Terminal {
         if result == 0 && winsize.ws_row > 0 && winsize.ws_col > 0 {
             Ok((winsize.ws_row as usize, winsize.ws_col as usize))
         } else {
-            Err(io::Error::other(
-                "Failed to get terminal size",
-            ))
+            Err(io::Error::other("Failed to get terminal size"))
         }
     }
 

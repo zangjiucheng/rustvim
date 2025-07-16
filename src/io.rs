@@ -186,9 +186,7 @@ impl Editor {
         self.current_buffer = original_buffer;
 
         if error_count > 0 {
-            self.set_status_message(format!(
-                "{saved_count} files written, {error_count} errors"
-            ));
+            self.set_status_message(format!("{saved_count} files written, {error_count} errors"));
         } else if saved_count > 0 {
             self.set_status_message(format!("{saved_count} files written"));
         } else {
