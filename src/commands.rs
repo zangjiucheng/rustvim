@@ -6,9 +6,9 @@ use crate::input::Key;
 /// Represents an operator waiting for a motion
 #[derive(Debug, Clone)]
 pub enum Operator {
-    Delete,    // d
-    Yank,      // y
-    Change,    // c (future)
+    Delete, // d
+    Yank,   // y
+    Change, // c (future)
 }
 
 /// Represents different types of commands in Normal mode
@@ -17,13 +17,13 @@ pub enum Operator {
 pub enum NormalCommand {
     /// Movement commands
     Movement(MovementCommand),
-    
+
     /// Edit commands
     Edit(EditCommand),
-    
+
     /// Mode switch commands
     ModeSwitch(ModeSwitchCommand),
-    
+
     /// File operations
     File(FileCommand),
 }
@@ -36,15 +36,9 @@ impl Command for NormalCommand {
                 MovementExecutor::execute_movement(editor, mov.clone(), count);
                 Ok(())
             }
-            NormalCommand::Edit(edit) => {
-                edit.execute(editor)
-            }
-            NormalCommand::ModeSwitch(mode_switch) => {
-                mode_switch.execute(editor)
-            }
-            NormalCommand::File(file) => {
-                file.execute(editor)
-            }
+            NormalCommand::Edit(edit) => edit.execute(editor),
+            NormalCommand::ModeSwitch(mode_switch) => mode_switch.execute(editor),
+            NormalCommand::File(file) => file.execute(editor),
         }
     }
 }
@@ -56,8 +50,15 @@ pub trait Command {
 
 /// Trait for motion calculations
 pub trait Motion {
-    fn calculate_end_position(&self, editor: &Editor, start: (usize, usize), count: usize) -> (usize, usize);
-    fn is_line_motion(&self) -> bool { false }
+    fn calculate_end_position(
+        &self,
+        editor: &Editor,
+        start: (usize, usize),
+        count: usize,
+    ) -> (usize, usize);
+    fn is_line_motion(&self) -> bool {
+        false
+    }
 }
 
 /// Movement commands for cursor navigation
@@ -68,31 +69,36 @@ pub enum MovementCommand {
     Right,
     Up,
     Down,
-    
+
     /// Word movements
-    WordForward,      // w
-    WordBackward,     // b
-    WordEnd,          // e
-    
+    WordForward, // w
+    WordBackward, // b
+    WordEnd,      // e
+
     /// Line movements
-    LineStart,        // 0
-    LineFirstChar,    // ^
-    LineEnd,          // $
-    
+    LineStart, // 0
+    LineFirstChar, // ^
+    LineEnd,       // $
+
     /// File movements
-    FileStart,        // gg
-    FileEnd,          // G
-    
+    FileStart, // gg
+    FileEnd, // G
+
     /// Page movements
-    PageUp,           // Ctrl-U
-    PageDown,         // Ctrl-D
+    PageUp, // Ctrl-U
+    PageDown, // Ctrl-D
 }
 
 impl Motion for MovementCommand {
-    fn calculate_end_position(&self, editor: &Editor, start: (usize, usize), count: usize) -> (usize, usize) {
+    fn calculate_end_position(
+        &self,
+        editor: &Editor,
+        start: (usize, usize),
+        count: usize,
+    ) -> (usize, usize) {
         let mut temp_row = start.0;
         let mut temp_col = start.1;
-        
+
         for _ in 0..count {
             match self {
                 MovementCommand::Left => {
@@ -131,9 +137,7 @@ impl Motion for MovementCommand {
                 }
                 MovementCommand::LineFirstChar => {
                     if let Some(line) = editor.buffer().get_line(temp_row) {
-                        temp_col = line.chars()
-                            .position(|c| !c.is_whitespace())
-                            .unwrap_or(0);
+                        temp_col = line.chars().position(|c| !c.is_whitespace()).unwrap_or(0);
                     }
                     break;
                 }
@@ -168,17 +172,18 @@ impl Motion for MovementCommand {
                 MovementCommand::PageDown => {
                     let content_rows = editor.terminal.rows().saturating_sub(1);
                     let page_size = content_rows / 2; // Half page like Vim's Ctrl-D
-                    temp_row = (temp_row + page_size).min(editor.buffer().line_count().saturating_sub(1));
+                    temp_row =
+                        (temp_row + page_size).min(editor.buffer().line_count().saturating_sub(1));
                     let line_len = editor.buffer().line_length(temp_row);
                     temp_col = temp_col.min(line_len.saturating_sub(1));
                     break;
                 }
             }
         }
-        
+
         (temp_row, temp_col)
     }
-    
+
     fn is_line_motion(&self) -> bool {
         match self {
             MovementCommand::FileStart |  // gg - go to start of file
@@ -192,27 +197,27 @@ impl Motion for MovementCommand {
 #[derive(Debug, Clone)]
 pub enum EditCommand {
     /// Delete commands
-    DeleteChar,       // x
-    DeleteLine,       // dd
+    DeleteChar, // x
+    DeleteLine,              // dd
     Delete(MovementCommand), // d{motion}
-    DeleteSelection,  // d in visual mode
-    
+    DeleteSelection,         // d in visual mode
+
     /// Yank (copy) commands
-    YankLine,         // yy
+    YankLine, // yy
     Yank(MovementCommand), // y{motion}
-    YankSelection,    // y in visual mode
-    
+    YankSelection,         // y in visual mode
+
     /// Paste commands
-    PasteAfter,       // p
-    PasteBefore,      // P
-    
+    PasteAfter, // p
+    PasteBefore, // P
+
     /// Undo/Redo
-    Undo,             // u
-    Redo,             // Ctrl-R
-    
+    Undo, // u
+    Redo, // Ctrl-R
+
     /// Search commands
-    SearchNext,       // n
-    SearchPrevious,   // N
+    SearchNext, // n
+    SearchPrevious, // N
 }
 
 impl Command for EditCommand {
@@ -267,7 +272,9 @@ impl Command for EditCommand {
                 Ok(())
             }
             EditCommand::DeleteSelection => {
-                editor.delete_visual_selection().map_err(|e| e.to_string())?;
+                editor
+                    .delete_visual_selection()
+                    .map_err(|e| e.to_string())?;
                 Ok(())
             }
             EditCommand::YankSelection => {
@@ -282,26 +289,26 @@ impl Command for EditCommand {
 #[derive(Debug, Clone)]
 pub enum ModeSwitchCommand {
     /// Insert mode variants
-    InsertBefore,     // i
-    InsertAfter,      // a
-    InsertLineEnd,    // A
-    InsertLineStart,  // I
-    
+    InsertBefore, // i
+    InsertAfter,     // a
+    InsertLineEnd,   // A
+    InsertLineStart, // I
+
     /// Open line commands
-    OpenLineBelow,    // o
-    OpenLineAbove,    // O
-    
+    OpenLineBelow, // o
+    OpenLineAbove, // O
+
     /// Command mode
-    CommandMode,      // :
-    
+    CommandMode, // :
+
     /// Search mode
-    SearchForward,    // /
-    SearchBackward,   // ?
-    
+    SearchForward, // /
+    SearchBackward, // ?
+
     /// Visual mode
-    EnterVisual,      // v
-    EnterVisualLine,  // V
-    ExitVisual,       // Esc or mode change
+    EnterVisual, // v
+    EnterVisualLine, // V
+    ExitVisual,      // Esc or mode change
 }
 
 impl Command for ModeSwitchCommand {
@@ -331,7 +338,10 @@ impl Command for ModeSwitchCommand {
                 editor.mode = Mode::Insert;
             }
             ModeSwitchCommand::OpenLineBelow => {
-                let pos = crate::buffer::Position::new(editor.cursor().row, editor.buffer().line_length(editor.cursor().row));
+                let pos = crate::buffer::Position::new(
+                    editor.cursor().row,
+                    editor.buffer().line_length(editor.cursor().row),
+                );
                 editor.buffer_mut().insert_newline(pos);
                 editor.cursor_mut().row += 1;
                 editor.cursor_mut().col = 0;
@@ -379,11 +389,11 @@ impl Command for ModeSwitchCommand {
 /// File operation commands
 #[derive(Debug, Clone)]
 pub enum FileCommand {
-    Save,             // :w
-    Quit,             // :q
-    SaveQuit,         // :wq
-    ForceQuit,        // :q!
-    Open(String),     // :e filename
+    Save,         // :w
+    Quit,         // :q
+    SaveQuit,     // :wq
+    ForceQuit,    // :q!
+    Open(String), // :e filename
 }
 
 impl Command for FileCommand {
@@ -397,28 +407,44 @@ impl Command for FileCommand {
 #[derive(Debug, Clone)]
 pub enum ExCommand {
     /// Write file operations
-    Write { filename: Option<String> },
+    Write {
+        filename: Option<String>,
+    },
     /// Quit operations
-    Quit { force: bool },
+    Quit {
+        force: bool,
+    },
     /// Quit all operations
-    QuitAll { force: bool },
+    QuitAll {
+        force: bool,
+    },
     /// Write all operations
     WriteAll,
     /// Write and quit operations
-    WriteQuit { force: bool },
+    WriteQuit {
+        force: bool,
+    },
     /// Write all and quit operations
     WriteQuitAll,
     /// Edit file operations
-    Edit { filename: String },
+    Edit {
+        filename: String,
+    },
     /// Buffer navigation
     BufferNext,
     BufferPrev,
-    BufferSwitch { number: usize },
+    BufferSwitch {
+        number: usize,
+    },
     BufferList,
     /// Generic buffer number switch
-    BufferNumber { number: usize },
+    BufferNumber {
+        number: usize,
+    },
     /// Unknown command
-    Unknown { command: String },
+    Unknown {
+        command: String,
+    },
 }
 
 impl Command for ExCommand {
@@ -503,19 +529,25 @@ impl ExCommandParser {
     /// Parse an Ex command string into an ExCommand enum
     pub fn parse(command: &str) -> ExCommand {
         if command.is_empty() {
-            return ExCommand::Unknown { command: command.to_string() };
+            return ExCommand::Unknown {
+                command: command.to_string(),
+            };
         }
-        
+
         let parts: Vec<&str> = command.split_whitespace().collect();
         if parts.is_empty() {
-            return ExCommand::Unknown { command: command.to_string() };
+            return ExCommand::Unknown {
+                command: command.to_string(),
+            };
         }
-        
+
         match parts[0] {
             "w" => {
                 if parts.len() > 1 {
                     let filename = parts[1..].join(" ");
-                    ExCommand::Write { filename: Some(filename) }
+                    ExCommand::Write {
+                        filename: Some(filename),
+                    }
                 } else {
                     ExCommand::Write { filename: None }
                 }
@@ -532,7 +564,9 @@ impl ExCommandParser {
                     let filename = parts[1..].join(" ");
                     ExCommand::Edit { filename }
                 } else {
-                    ExCommand::Unknown { command: "E471: Argument required".to_string() }
+                    ExCommand::Unknown {
+                        command: "E471: Argument required".to_string(),
+                    }
                 }
             }
             "bn" | "bnext" => ExCommand::BufferNext,
@@ -543,10 +577,14 @@ impl ExCommandParser {
                     if let Ok(buffer_num) = parts[1].parse::<usize>() {
                         ExCommand::BufferSwitch { number: buffer_num }
                     } else {
-                        ExCommand::Unknown { command: "E86: Invalid buffer number".to_string() }
+                        ExCommand::Unknown {
+                            command: "E86: Invalid buffer number".to_string(),
+                        }
                     }
                 } else {
-                    ExCommand::Unknown { command: "E471: Argument required".to_string() }
+                    ExCommand::Unknown {
+                        command: "E471: Argument required".to_string(),
+                    }
                 }
             }
             _ => {
@@ -554,7 +592,9 @@ impl ExCommandParser {
                 if let Ok(buffer_num) = parts[0].parse::<usize>() {
                     ExCommand::BufferNumber { number: buffer_num }
                 } else {
-                    ExCommand::Unknown { command: command.to_string() }
+                    ExCommand::Unknown {
+                        command: command.to_string(),
+                    }
                 }
             }
         }
@@ -567,10 +607,10 @@ pub struct ExCommandExecutor;
 impl ExCommandExecutor {
     /// Execute edit command with file loading logic
     pub fn execute_edit(editor: &mut Editor, filename: &str) {
-        use crate::editor::{BufferInfo, Cursor};
         use crate::buffer::Buffer;
+        use crate::editor::{BufferInfo, Cursor};
         use crate::history::History;
-        
+
         // Create a new buffer for the file
         match std::fs::read_to_string(filename) {
             Ok(content) => {
@@ -583,7 +623,7 @@ impl ExCommandExecutor {
                     scroll_offset: 0,
                     history: History::new(),
                 };
-                
+
                 editor.add_buffer(buffer_info);
                 let line_count = editor.buffer().line_count();
                 editor.set_status_message(format!("\"{}\" {}L read", filename, line_count));
@@ -598,7 +638,7 @@ impl ExCommandExecutor {
                     scroll_offset: 0,
                     history: History::new(),
                 };
-                
+
                 editor.add_buffer(buffer_info);
                 editor.set_status_message(format!("\"{}\" [New File]", filename));
             }
@@ -622,12 +662,12 @@ impl MotionCalculator {
     fn is_word_char(c: char) -> bool {
         c.is_alphanumeric() || c == '_'
     }
-    
+
     /// Helper function to check if a character is punctuation/symbol
     fn is_punct_char(c: char) -> bool {
         !c.is_whitespace() && !Self::is_word_char(c)
     }
-    
+
     /// Get the character type for word motion logic
     fn char_type(c: char) -> CharType {
         if c.is_whitespace() {
@@ -638,32 +678,32 @@ impl MotionCalculator {
             CharType::Punctuation
         }
     }
-    
+
     /// Move cursor to the beginning of the next word (w command)
     pub fn word_forward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
                 let chars: Vec<char> = line.chars().collect();
-                
+
                 if *col >= chars.len() {
                     // At end of line, move to next line
                     if *row + 1 < editor.buffer().line_count() {
                         *row += 1;
                         *col = 0;
-                        
+
                         // Find first non-whitespace character in new line
                         if let Some(next_line) = editor.buffer().get_line(*row) {
                             let next_chars: Vec<char> = next_line.chars().collect();
-                            
+
                             if next_chars.is_empty() {
                                 break; // Empty line is a valid word boundary
                             }
-                            
+
                             // Skip leading whitespace
                             while *col < next_chars.len() && next_chars[*col].is_whitespace() {
                                 *col += 1;
                             }
-                            
+
                             if *col < next_chars.len() {
                                 break; // Found start of next word
                             }
@@ -676,17 +716,17 @@ impl MotionCalculator {
                     if *col < chars.len() {
                         let current_type = Self::char_type(chars[*col]);
                         *col += 1;
-                        
+
                         // Skip remaining characters of the same type
                         while *col < chars.len() && Self::char_type(chars[*col]) == current_type {
                             *col += 1;
                         }
-                        
+
                         // Skip whitespace to find next word/punctuation
                         while *col < chars.len() && chars[*col].is_whitespace() {
                             *col += 1;
                         }
-                        
+
                         if *col < chars.len() {
                             break; // Found start of next word/punctuation
                         }
@@ -698,25 +738,25 @@ impl MotionCalculator {
             }
         }
     }
-    
+
     /// Move cursor to the beginning of the previous word (b command)  
     pub fn word_backward(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
                 let chars: Vec<char> = line.chars().collect();
-                
+
                 if *col == 0 {
                     // At beginning of line, move to previous line
                     if *row > 0 {
                         *row -= 1;
                         if let Some(prev_line) = editor.buffer().get_line(*row) {
                             let prev_chars: Vec<char> = prev_line.chars().collect();
-                            
+
                             if prev_chars.is_empty() {
                                 *col = 0;
                                 break; // Empty line is a valid word boundary
                             }
-                            
+
                             *col = prev_chars.len();
                             // Continue to find word boundary in previous line
                         }
@@ -726,41 +766,41 @@ impl MotionCalculator {
                 } else {
                     // Move back at least one character
                     *col -= 1;
-                    
+
                     // Skip whitespace
                     while *col > 0 && chars[*col].is_whitespace() {
                         *col -= 1;
                     }
-                    
+
                     // If we're at position 0 and it's whitespace, handle line boundary
                     if *col == 0 && chars[*col].is_whitespace() {
                         if *row > 0 {
                             *row -= 1;
                             if let Some(prev_line) = editor.buffer().get_line(*row) {
                                 let prev_chars: Vec<char> = prev_line.chars().collect();
-                                
+
                                 if prev_chars.is_empty() {
                                     *col = 0;
                                     break;
                                 }
-                                
+
                                 *col = prev_chars.len();
                                 continue; // Continue processing in previous line
                             }
                         }
                         break;
                     }
-                    
+
                     // Find the beginning of the current word/punctuation group
                     if *col < chars.len() {
                         let current_type = Self::char_type(chars[*col]);
-                        
+
                         // Move back while characters are of the same type
                         while *col > 0 && Self::char_type(chars[*col - 1]) == current_type {
                             *col -= 1;
                         }
                     }
-                    
+
                     break;
                 }
             } else {
@@ -768,13 +808,13 @@ impl MotionCalculator {
             }
         }
     }
-    
+
     /// Move cursor to the end of the current/next word (e command)
     pub fn word_end(editor: &Editor, row: &mut usize, col: &mut usize) {
         loop {
             if let Some(line) = editor.buffer().get_line(*row) {
                 let chars: Vec<char> = line.chars().collect();
-                
+
                 if chars.is_empty() {
                     // Empty line, move to next line
                     if *row + 1 < editor.buffer().line_count() {
@@ -785,7 +825,7 @@ impl MotionCalculator {
                         break; // End of file
                     }
                 }
-                
+
                 if *col >= chars.len() {
                     // At end of line, move to next line
                     if *row + 1 < editor.buffer().line_count() {
@@ -796,40 +836,42 @@ impl MotionCalculator {
                         break; // End of file
                     }
                 }
-                
+
                 // Special case: if we're at the end of a word/punctuation, move forward first
                 if *col < chars.len() {
                     let current_type = Self::char_type(chars[*col]);
-                    
+
                     // If we're at the end of a word/punctuation group, or on whitespace, move to next
-                    if current_type == CharType::Whitespace || 
-                       (*col + 1 < chars.len() && Self::char_type(chars[*col + 1]) != current_type) ||
-                       (*col + 1 >= chars.len()) {
-                        
+                    if current_type == CharType::Whitespace
+                        || (*col + 1 < chars.len()
+                            && Self::char_type(chars[*col + 1]) != current_type)
+                        || (*col + 1 >= chars.len())
+                    {
                         // Move forward past current character and whitespace
                         *col += 1;
-                        
+
                         // Skip whitespace
                         while *col < chars.len() && chars[*col].is_whitespace() {
                             *col += 1;
                         }
-                        
+
                         if *col >= chars.len() {
                             continue; // Continue to next line
                         }
                     }
                 }
-                
+
                 // Now find the end of the current word/punctuation group
                 if *col < chars.len() {
                     let current_type = Self::char_type(chars[*col]);
-                    
+
                     // Move to the end of the current word/punctuation group
-                    while *col + 1 < chars.len() && Self::char_type(chars[*col + 1]) == current_type {
+                    while *col + 1 < chars.len() && Self::char_type(chars[*col + 1]) == current_type
+                    {
                         *col += 1;
                     }
                 }
-                
+
                 break;
             } else {
                 break;
@@ -847,12 +889,13 @@ impl TextOperations {
         let cursor_pos = editor.cursor_position();
         if let Some(deleted_char) = editor.buffer_mut().delete_char(cursor_pos) {
             // Record the deletion for undo
-            let action = crate::history::EditAction::delete_text(cursor_pos, deleted_char.to_string());
+            let action =
+                crate::history::EditAction::delete_text(cursor_pos, deleted_char.to_string());
             editor.history_mut().push(action);
-            
+
             // Store the deleted character in the register
             editor.register.store_text(deleted_char.to_string());
-            
+
             editor.set_modified(true);
             let line_len = editor.buffer().line_length(editor.cursor().row);
             if editor.cursor().col >= line_len && line_len > 0 {
@@ -863,19 +906,19 @@ impl TextOperations {
             editor.update_scroll();
         }
     }
-    
+
     /// Delete text in a range from start to end position
     pub fn delete_range(editor: &mut Editor, start: (usize, usize), end: (usize, usize)) {
         let (start_row, start_col) = start;
         let (end_row, end_col) = end;
-        
-        let (from_row, from_col, to_row, to_col) = if start_row < end_row || 
-            (start_row == end_row && start_col <= end_col) {
-            (start_row, start_col, end_row, end_col)
-        } else {
-            (end_row, end_col, start_row, start_col)
-        };
-        
+
+        let (from_row, from_col, to_row, to_col) =
+            if start_row < end_row || (start_row == end_row && start_col <= end_col) {
+                (start_row, start_col, end_row, end_col)
+            } else {
+                (end_row, end_col, start_row, start_col)
+            };
+
         if from_row == to_row {
             if from_col < to_col {
                 for _ in from_col..to_col {
@@ -901,11 +944,11 @@ impl TextOperations {
                         editor.buffer_mut().delete_char(pos);
                     }
                 }
-                
+
                 for row in (from_row + 1..to_row).rev() {
                     Self::delete_line_at(editor, row);
                 }
-                
+
                 let adjusted_end_row = from_row + 1;
                 if adjusted_end_row < editor.buffer().line_count() {
                     for _ in 0..to_col {
@@ -914,13 +957,16 @@ impl TextOperations {
                             editor.buffer_mut().delete_char(pos);
                         }
                     }
-                    
+
                     if let Some(remaining_text) = editor.buffer().get_line(adjusted_end_row) {
                         let remaining = remaining_text.clone();
                         Self::delete_line_at(editor, adjusted_end_row);
-                        
+
                         for ch in remaining.chars() {
-                            let pos = crate::buffer::Position::new(from_row, editor.buffer().line_length(from_row));
+                            let pos = crate::buffer::Position::new(
+                                from_row,
+                                editor.buffer().line_length(from_row),
+                            );
                             editor.buffer_mut().insert_char(pos, ch);
                         }
                     }
@@ -932,14 +978,14 @@ impl TextOperations {
                         editor.buffer_mut().delete_char(pos);
                     }
                 }
-                
+
                 for row in (to_row..from_row).rev() {
                     Self::delete_line_at(editor, row);
                 }
             }
         }
     }
-    
+
     /// Delete a line at specific row
     pub fn delete_line_at(editor: &mut Editor, row: usize) {
         let line_len = editor.buffer().line_length(row);
@@ -947,7 +993,7 @@ impl TextOperations {
             let pos = crate::buffer::Position::new(row, 0);
             editor.buffer_mut().delete_char(pos);
         }
-        
+
         if row < editor.buffer().line_count() - 1 {
             let pos = crate::buffer::Position::new(row, 0);
             if editor.buffer().line_length(row) == 0 {
@@ -955,7 +1001,7 @@ impl TextOperations {
             }
         }
     }
-    
+
     /// Clear a line at specific row
     pub fn clear_line_at(editor: &mut Editor, row: usize) {
         let line_len = editor.buffer().line_length(row);
@@ -964,16 +1010,19 @@ impl TextOperations {
             editor.buffer_mut().delete_char(pos);
         }
     }
-    
+
     /// Extract text from a range without modifying the buffer (for yank operations)
     pub fn extract_range(editor: &Editor, start: (usize, usize), end: (usize, usize)) -> String {
         editor.buffer().extract_range(start, end)
     }
-    
+
     /// Ensure cursor is within valid buffer bounds
     pub fn clamp_cursor_to_buffer(editor: &mut Editor) {
-        editor.cursor_mut().row = editor.cursor().row.min(editor.buffer().line_count().saturating_sub(1));
-        
+        editor.cursor_mut().row = editor
+            .cursor()
+            .row
+            .min(editor.buffer().line_count().saturating_sub(1));
+
         let line_len = editor.buffer().line_length(editor.cursor().row);
         if line_len > 0 {
             editor.cursor_mut().col = editor.cursor().col.min(line_len - 1);
@@ -1013,10 +1062,9 @@ impl MovementExecutor {
                     } else {
                         break;
                     };
-                    
-                    let first_non_blank = line.chars()
-                        .position(|c| !c.is_whitespace())
-                        .unwrap_or(0);
+
+                    let first_non_blank =
+                        line.chars().position(|c| !c.is_whitespace()).unwrap_or(0);
                     editor.cursor_mut().col = first_non_blank;
                     break;
                 }
@@ -1074,7 +1122,7 @@ impl OperatorExecutor {
     pub fn execute_delete_line(editor: &mut Editor, count: usize) {
         let start_row = editor.cursor().row;
         let mut deleted_lines = Vec::new();
-        
+
         // First, collect the lines to be deleted for the register
         for i in 0..count {
             let row = start_row + i;
@@ -1084,28 +1132,28 @@ impl OperatorExecutor {
                 }
             }
         }
-        
+
         // Store in register
         if !deleted_lines.is_empty() {
             let deleted_text = deleted_lines.join("\n") + "\n";
             editor.register.store_lines(deleted_text.clone());
-            
+
             // Record the line deletion for undo
             let delete_pos = crate::buffer::Position::new(start_row, 0);
             let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
             editor.history_mut().push(action);
         }
-        
+
         // Now delete the lines
         for _ in 0..count {
             if editor.buffer().line_count() > 1 {
                 if let Some(_deleted_line) = editor.buffer().get_line(editor.cursor().row) {
                     TextOperations::delete_line_at(editor, editor.cursor().row);
-                    
+
                     if editor.cursor().row >= editor.buffer().line_count() {
                         editor.cursor_mut().row = editor.buffer().line_count().saturating_sub(1);
                     }
-                    
+
                     let line_len = editor.buffer().line_length(editor.cursor().row);
                     if editor.cursor().col >= line_len && line_len > 0 {
                         editor.cursor_mut().col = line_len - 1;
@@ -1121,19 +1169,19 @@ impl OperatorExecutor {
                 break;
             }
         }
-        
+
         editor.set_modified(true);
         editor.update_scroll();
     }
-    
+
     /// Execute delete with motion command (dw, d$, etc.)
     pub fn execute_delete_motion(editor: &mut Editor, motion: MovementCommand, count: usize) {
         let start_pos = (editor.cursor().row, editor.cursor().col);
         let end_pos = motion.calculate_end_position(editor, start_pos, count);
-        
+
         // Extract text for register before deleting
         let deleted_text = TextOperations::extract_range(editor, start_pos, end_pos);
-        
+
         // Store in register
         if !deleted_text.is_empty() {
             if motion.is_line_motion() {
@@ -1141,46 +1189,47 @@ impl OperatorExecutor {
             } else {
                 editor.register.store_text(deleted_text.clone());
             }
-            
+
             // Record the deletion for undo - use the correct position for reinsertion
-            let (delete_row, delete_col) = if start_pos.0 < end_pos.0 || 
-                (start_pos.0 == end_pos.0 && start_pos.1 <= end_pos.1) {
+            let (delete_row, delete_col) = if start_pos.0 < end_pos.0
+                || (start_pos.0 == end_pos.0 && start_pos.1 <= end_pos.1)
+            {
                 // Forward motion (like dw, d$) - reinsert at start position
                 start_pos
             } else {
-                // Backward motion (like dgg) - reinsert at end position  
+                // Backward motion (like dgg) - reinsert at end position
                 end_pos
             };
             let delete_pos = crate::buffer::Position::new(delete_row, delete_col);
             let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
             editor.history_mut().push(action);
         }
-        
+
         let final_cursor_pos = match motion {
-            MovementCommand::WordBackward | 
-            MovementCommand::LineStart | 
-            MovementCommand::LineFirstChar |
-            MovementCommand::FileStart |
-            MovementCommand::Left => end_pos,
+            MovementCommand::WordBackward
+            | MovementCommand::LineStart
+            | MovementCommand::LineFirstChar
+            | MovementCommand::FileStart
+            | MovementCommand::Left => end_pos,
             _ => start_pos,
         };
-        
+
         TextOperations::delete_range(editor, start_pos, end_pos);
-        
+
         editor.cursor_mut().row = final_cursor_pos.0;
         editor.cursor_mut().col = final_cursor_pos.1;
-        
+
         TextOperations::clamp_cursor_to_buffer(editor);
-        
+
         editor.set_modified(true);
         editor.update_scroll();
     }
-    
+
     /// Execute yank line command (yy)
     pub fn execute_yank_line(editor: &mut Editor, count: usize) {
         let start_row = editor.cursor().row;
         let mut yanked_lines = Vec::new();
-        
+
         for i in 0..count {
             let row = start_row + i;
             if row < editor.buffer().line_count() {
@@ -1189,11 +1238,11 @@ impl OperatorExecutor {
                 }
             }
         }
-        
+
         if !yanked_lines.is_empty() {
             let yanked_text = yanked_lines.join("\n") + "\n";
             editor.register.store_lines(yanked_text);
-            
+
             // Set status message
             let message = if count == 1 {
                 "1 line yanked".to_string()
@@ -1203,25 +1252,25 @@ impl OperatorExecutor {
             editor.status_msg = Some(message);
         }
     }
-    
+
     /// Execute yank with motion command (yw, y$, etc.)
     pub fn execute_yank_motion(editor: &mut Editor, motion: MovementCommand, count: usize) {
         let start_pos = (editor.cursor().row, editor.cursor().col);
         let end_pos = motion.calculate_end_position(editor, start_pos, count);
-        
+
         // Extract text from the range
         let yanked_text = TextOperations::extract_range(editor, start_pos, end_pos);
-        
+
         if !yanked_text.is_empty() {
             // Determine if this is a line-based motion
             let is_line_motion = motion.is_line_motion();
-            
+
             if is_line_motion {
                 editor.register.store_lines(yanked_text);
             } else {
                 editor.register.store_text(yanked_text);
             }
-            
+
             // Set status message
             let message = if is_line_motion {
                 let line_count = editor.register.content.matches('\n').count();
@@ -1241,41 +1290,43 @@ impl OperatorExecutor {
             editor.status_msg = Some(message);
         }
     }
-    
+
     /// Execute paste after cursor (p)
     pub fn execute_paste_after(editor: &mut Editor) {
         if editor.register.is_empty() {
             editor.status_msg = Some("Nothing to paste".to_string());
             return;
         }
-        
+
         let is_line_based = editor.register.is_line_based;
         let content = editor.register.content.clone();
-        
+
         let paste_pos = if is_line_based {
             crate::buffer::Position::new(editor.cursor().row + 1, 0)
         } else {
             crate::buffer::Position::new(editor.cursor().row, editor.cursor().col + 1)
         };
-        
+
         if is_line_based {
             // Insert lines after current line
             let lines: Vec<&str> = content.trim_end_matches('\n').split('\n').collect();
-            
+
             // Record the line-based paste for undo
             let action = crate::history::EditAction::insert_text(paste_pos, content.clone());
             editor.history_mut().push(action);
-            
+
             for (i, line) in lines.iter().enumerate() {
                 let insert_row = editor.cursor().row + 1 + i;
-                editor.buffer_mut().insert_line(insert_row, line.to_string());
+                editor
+                    .buffer_mut()
+                    .insert_line(insert_row, line.to_string());
             }
-            
+
             // Move cursor to the start of the first inserted line
             if lines.len() > 0 {
                 editor.cursor_mut().row += 1;
                 editor.cursor_mut().col = 0;
-                
+
                 // Move to first non-blank character
                 let line_len = editor.buffer().line_length(editor.cursor().row);
                 for col in 0..line_len {
@@ -1291,64 +1342,66 @@ impl OperatorExecutor {
             // Insert text after cursor position
             let chars: Vec<char> = content.chars().collect();
             let mut insert_col = editor.cursor().col + 1;
-            
+
             // Clamp insert position to line length
             let line_len = editor.buffer().line_length(editor.cursor().row);
             if insert_col > line_len {
                 insert_col = line_len;
             }
-            
+
             // Record the text paste for undo
             let final_pos = crate::buffer::Position::new(editor.cursor().row, insert_col);
             let action = crate::history::EditAction::insert_text(final_pos, content);
             editor.history_mut().push(action);
-            
+
             for (i, ch) in chars.iter().enumerate() {
                 let pos = crate::buffer::Position::new(editor.cursor().row, insert_col + i);
                 editor.buffer_mut().insert_char(pos, *ch);
             }
-            
+
             // Move cursor to end of pasted text
             editor.cursor_mut().col = insert_col + chars.len().saturating_sub(1);
         }
-        
+
         editor.set_modified(true);
         TextOperations::clamp_cursor_to_buffer(editor);
         editor.update_scroll();
     }
-    
+
     /// Execute paste before cursor (P)
     pub fn execute_paste_before(editor: &mut Editor) {
         if editor.register.is_empty() {
             editor.status_msg = Some("Nothing to paste".to_string());
             return;
         }
-        
+
         let is_line_based = editor.register.is_line_based;
         let content = editor.register.content.clone();
-        
+
         let paste_pos = if is_line_based {
             crate::buffer::Position::new(editor.cursor().row, 0)
         } else {
             crate::buffer::Position::new(editor.cursor().row, editor.cursor().col)
         };
-        
+
         if is_line_based {
             // Insert lines before current line
             let lines: Vec<&str> = content.trim_end_matches('\n').split('\n').collect();
-            
+
             // Record the line-based paste for undo
             let action = crate::history::EditAction::insert_text(paste_pos, content.clone());
             editor.history_mut().push(action);
-            
+
             for (i, line) in lines.iter().enumerate() {
                 let insert_row = editor.cursor().row + i;
-                editor.buffer_mut().insert_line(insert_row, line.to_string());
+                editor
+                    .buffer_mut()
+                    .insert_line(insert_row, line.to_string());
             }
-            
+
             // Move cursor to the start of the first inserted line
             editor.cursor_mut().col = 0;
-            
+
             // Move to first non-blank character
             let line_len = editor.buffer().line_length(editor.cursor().row);
             for col in 0..line_len {
@@ -1362,21 +1415,22 @@ impl OperatorExecutor {
         } else {
             // Insert text at cursor position
             let chars: Vec<char> = content.chars().collect();
-            
+
             // Record the text paste for undo
             let final_pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col);
             let action = crate::history::EditAction::insert_text(final_pos, content);
             editor.history_mut().push(action);
-            
+
             for (i, ch) in chars.iter().enumerate() {
-                let pos = crate::buffer::Position::new(editor.cursor().row, editor.cursor().col + i);
+                let pos =
+                    crate::buffer::Position::new(editor.cursor().row, editor.cursor().col + i);
                 editor.buffer_mut().insert_char(pos, *ch);
             }
-            
+
             // Move cursor to end of pasted text
             editor.cursor_mut().col += chars.len().saturating_sub(1);
         }
-        
+
         editor.set_modified(true);
         TextOperations::clamp_cursor_to_buffer(editor);
         editor.update_scroll();

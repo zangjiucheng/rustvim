@@ -5,32 +5,32 @@ use std::io::{self, Read};
 pub enum Key {
     /// Regular character input
     Char(char),
-    
+
     /// Control keys
     Ctrl(char),
-    
+
     /// Special keys
     Esc,
     Enter,
     Backspace,
     Delete,
     Tab,
-    
+
     /// Arrow keys
     Up,
     Down,
     Left,
     Right,
-    
+
     /// Navigation keys
     Home,
     End,
     PageUp,
     PageDown,
-    
+
     /// Function keys (F1-F12)
     Function(u8),
-    
+
     /// Unknown/unsupported key sequence
     Unknown,
 }
@@ -47,11 +47,11 @@ impl InputHandler {
             stdin: std::io::stdin(),
         }
     }
-    
+
     /// Read a single key from input with full escape sequence parsing
     pub fn read_key(&mut self) -> io::Result<Key> {
         let mut buffer = [0; 1];
-        
+
         // Read exactly one byte (this will block until available)
         loop {
             match self.stdin.read(&mut buffer) {
@@ -67,7 +67,7 @@ impl InputHandler {
                 }
             }
         }
-        
+
         match buffer[0] {
             // ESC key or start of escape sequence
             b'\x1b' => {
@@ -94,23 +94,23 @@ impl InputHandler {
             _ => Ok(Key::Unknown),
         }
     }
-    
+
     /// Parse escape sequences for special keys (arrows, home, end, etc.)
     fn parse_escape_sequence(&mut self) -> io::Result<Key> {
-        use std::time::{Duration, Instant};
         use std::os::unix::io::AsRawFd;
-        
+        use std::time::{Duration, Instant};
+
         let mut buffer = [0; 1];
         let stdin_fd = self.stdin.as_raw_fd();
-        
+
         // Set stdin to non-blocking mode temporarily
         let flags = unsafe { libc::fcntl(stdin_fd, libc::F_GETFL) };
         unsafe { libc::fcntl(stdin_fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
-        
+
         // Try to read with a timeout
         let start = Instant::now();
         let timeout = Duration::from_millis(100); // 100ms timeout
-        
+
         let result = loop {
             match self.stdin.read(&mut buffer) {
                 Ok(0) => {
@@ -139,28 +139,28 @@ impl InputHandler {
                 }
             }
         };
-        
+
         // Restore blocking mode
         unsafe { libc::fcntl(stdin_fd, libc::F_SETFL, flags) };
-        
+
         result
     }
-    
+
     /// Parse the actual escape sequence after confirming we have data
     fn parse_escape_sequence_inner(&mut self, first_byte: u8) -> io::Result<Key> {
         let mut buffer = [0; 1];
-        
+
         match first_byte {
             b'[' => {
                 // CSI (Control Sequence Introducer) - read the command byte
                 loop {
                     match self.stdin.read(&mut buffer) {
-                        Ok(0) => continue, // Keep trying until we get data
-                        Ok(_) => break,    // Got data, continue parsing
+                        Ok(0) => continue,             // Keep trying until we get data
+                        Ok(_) => break,                // Got data, continue parsing
                         Err(_) => return Ok(Key::Esc), // Error - treat as lone ESC
                     }
                 }
-                
+
                 match buffer[0] {
                     // Arrow keys - single letter after ESC[
                     b'A' => Ok(Key::Up),
@@ -181,14 +181,14 @@ impl InputHandler {
                                 Err(_) => return Ok(Key::Unknown),
                             }
                         }
-                        
+
                         if buffer[0] == b'~' {
                             match digit {
-                                b'1' => Ok(Key::Home),       // ESC[1~
-                                b'3' => Ok(Key::Delete),     // ESC[3~
-                                b'4' => Ok(Key::End),        // ESC[4~
-                                b'5' => Ok(Key::PageUp),     // ESC[5~
-                                b'6' => Ok(Key::PageDown),   // ESC[6~
+                                b'1' => Ok(Key::Home),     // ESC[1~
+                                b'3' => Ok(Key::Delete),   // ESC[3~
+                                b'4' => Ok(Key::End),      // ESC[4~
+                                b'5' => Ok(Key::PageUp),   // ESC[5~
+                                b'6' => Ok(Key::PageDown), // ESC[6~
                                 _ => Ok(Key::Unknown),
                             }
                         } else {
@@ -207,10 +207,10 @@ impl InputHandler {
                         Err(_) => return Ok(Key::Esc),
                     }
                 }
-                
+
                 match buffer[0] {
-                    b'H' => Ok(Key::Home),       // ESC O H
-                    b'F' => Ok(Key::End),        // ESC O F
+                    b'H' => Ok(Key::Home),        // ESC O H
+                    b'F' => Ok(Key::End),         // ESC O F
                     b'P' => Ok(Key::Function(1)), // F1
                     b'Q' => Ok(Key::Function(2)), // F2
                     b'R' => Ok(Key::Function(3)), // F3
@@ -230,17 +230,17 @@ impl Key {
     pub fn is_char(&self) -> bool {
         matches!(self, Key::Char(_))
     }
-    
+
     /// Check if this is a control key
     pub fn is_ctrl(&self) -> bool {
         matches!(self, Key::Ctrl(_))
     }
-    
+
     /// Check if this is an arrow key
     pub fn is_arrow(&self) -> bool {
         matches!(self, Key::Up | Key::Down | Key::Left | Key::Right)
     }
-    
+
     /// Get the character if this is a Char key
     pub fn as_char(&self) -> Option<char> {
         if let Key::Char(c) = self {

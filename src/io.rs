@@ -15,7 +15,7 @@ impl Editor {
             self.set_status_message("E32: No file name".to_string());
             return false;
         };
-        
+
         // Gather all buffer content
         let mut content = String::new();
         for i in 0..self.buffer().line_count() {
@@ -26,19 +26,22 @@ impl Editor {
                 }
             }
         }
-        
+
         // Add final newline if the buffer originally ended with one or if it's a new file
         if self.buffer().ends_with_newline {
             content.push('\n');
         }
-        
+
         // Write to file
         let char_count = content.len();
         match std::fs::write(&target_filename, content) {
             Ok(_) => {
                 self.set_modified(false);
                 let line_count = self.buffer().line_count();
-                self.set_status_message(format!("\"{}\" {}L, {}C written", target_filename, line_count, char_count));
+                self.set_status_message(format!(
+                    "\"{}\" {}L, {}C written",
+                    target_filename, line_count, char_count
+                ));
                 true
             }
             Err(e) => {
@@ -55,14 +58,14 @@ impl Editor {
                 Ok(content) => {
                     // Load new file content using Buffer::from_file to preserve newline info
                     *self.buffer_mut() = Buffer::from_file(&content);
-                    
+
                     self.set_filename(Some(filename.to_string()));
                     self.set_modified(false);
                     self.cursor_mut().row = 0;
                     self.cursor_mut().col = 0;
                     self.set_scroll_offset(0);
                     self.history_mut().clear(); // Clear undo history
-                    
+
                     let line_count = self.buffer().line_count();
                     self.set_status_message(format!("\"{}\" {}L read", filename, line_count));
                 }
@@ -76,7 +79,7 @@ impl Editor {
                     self.cursor_mut().col = 0;
                     self.set_scroll_offset(0);
                     self.history_mut().clear();
-                    
+
                     self.set_status_message(format!("\"{}\" [New File]", filename));
                 }
             }
@@ -94,13 +97,13 @@ impl Editor {
     /// Load multiple files into separate buffers
     pub fn load_files(&mut self, filenames: &[String]) -> Vec<Result<(), std::io::Error>> {
         let mut results = Vec::new();
-        
+
         // Clear the default empty buffer if we're loading files
         if self.buffers.len() == 1 && self.filename().is_none() && !self.is_modified() {
             self.buffers.clear();
             self.current_buffer = 0;
         }
-        
+
         for (i, filename) in filenames.iter().enumerate() {
             match std::fs::read_to_string(filename) {
                 Ok(content) => {
@@ -112,7 +115,7 @@ impl Editor {
                         scroll_offset: 0,
                         history: crate::history::History::new(),
                     };
-                    
+
                     if i == 0 && self.buffers.is_empty() {
                         // First buffer becomes the current buffer
                         self.buffers.push(buffer_info);
@@ -121,7 +124,7 @@ impl Editor {
                         // Additional buffers are added but don't become current
                         self.buffers.push(buffer_info);
                     }
-                    
+
                     results.push(Ok(()));
                 }
                 Err(e) => {
@@ -134,19 +137,19 @@ impl Editor {
                         scroll_offset: 0,
                         history: crate::history::History::new(),
                     };
-                    
+
                     if i == 0 && self.buffers.is_empty() {
                         self.buffers.push(buffer_info);
                         self.current_buffer = 0;
                     } else {
                         self.buffers.push(buffer_info);
                     }
-                    
+
                     results.push(Err(e));
                 }
             }
         }
-        
+
         results
     }
 
@@ -155,14 +158,14 @@ impl Editor {
         let mut all_saved = true;
         let mut saved_count = 0;
         let mut error_count = 0;
-        
+
         // Save current buffer index to restore later
         let original_buffer = self.current_buffer;
-        
+
         for i in 0..self.buffers.len() {
             // Switch to each buffer to write it
             self.current_buffer = i;
-            
+
             if self.is_modified() {
                 if self.filename().is_some() {
                     if self.write_file(None) {
@@ -179,27 +182,31 @@ impl Editor {
                 }
             }
         }
-        
+
         // Restore original buffer
         self.current_buffer = original_buffer;
-        
+
         if error_count > 0 {
-            self.set_status_message(format!("{} files written, {} errors", saved_count, error_count));
+            self.set_status_message(format!(
+                "{} files written, {} errors",
+                saved_count, error_count
+            ));
         } else if saved_count > 0 {
             self.set_status_message(format!("{} files written", saved_count));
         } else {
             self.set_status_message("No files needed saving".to_string());
         }
-        
+
         all_saved
     }
-    
-    
+
     /// Close current buffer (remove it from the buffers list)
     pub fn close_buffer(&mut self, force: bool) {
         // Check if buffer has unsaved changes
         if !force && self.is_modified() {
-            self.set_status_message("E37: No write since last change (add ! to override)".to_string());
+            self.set_status_message(
+                "E37: No write since last change (add ! to override)".to_string(),
+            );
             return;
         }
 
@@ -218,7 +225,10 @@ impl Editor {
         }
 
         // Show status
-        self.set_status_message(format!("Buffer closed. Now showing buffer {}", self.current_buffer + 1));
+        self.set_status_message(format!(
+            "Buffer closed. Now showing buffer {}",
+            self.current_buffer + 1
+        ));
     }
 
     /// Quit all buffers
@@ -227,12 +237,15 @@ impl Editor {
             // Check if any buffer has modifications
             for (i, buffer) in self.buffers.iter().enumerate() {
                 if buffer.modified {
-                    self.set_status_message(format!("E37: No write since last change in buffer {} (add ! to override)", i + 1));
+                    self.set_status_message(format!(
+                        "E37: No write since last change in buffer {} (add ! to override)",
+                        i + 1
+                    ));
                     return;
                 }
             }
         }
-        
+
         self.running = false;
     }
 }
