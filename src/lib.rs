@@ -1,4 +1,4 @@
-// Library interface for the VimLike Editor
+// Library interface for the RustVim Editor
 // This exposes modules for external use and testing
 
 pub mod buffer;

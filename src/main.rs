@@ -1,7 +1,7 @@
 use rustvim::editor::Editor;
 
 fn main() {
-    println!("VimLike Editor v0.1.0");
+    println!("RustVim Editor v0.1.0");
     println!("A Vim-inspired text editor built in Rust");
     println!();
     
