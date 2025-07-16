@@ -50,11 +50,13 @@ jobs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
-        file: lcov.info
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: lcov.info
         flags: unittests
         name: codecov-umbrella
+        verbose: true
         fail_ci_if_error: true
         
     - name: Archive coverage artifacts
@@ -62,7 +64,6 @@ jobs:
       with:
         name: coverage-report
         path: |
-          lcov.info
           coverage_summary.txt
           
     - name: Display coverage summary
