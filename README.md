@@ -244,6 +244,61 @@ cargo test --test integration_tests
 cargo test -- --nocapture
 ```
 
+## Code Coverage
+
+Generate and view code coverage reports to ensure comprehensive testing:
+
+### Prerequisites
+The LLVM coverage tool is included in dev dependencies, or install manually:
+```bash
+cargo install cargo-llvm-cov
+```
+
+### Quick Coverage Analysis
+Use the included coverage script for convenient analysis:
+```bash
+# Make the script executable (first time only)
+chmod +x coverage.sh
+
+# Generate coverage summary (default)
+./coverage.sh
+
+# Generate HTML report and open in browser
+./coverage.sh html
+
+# Generate all report formats
+./coverage.sh all
+
+# Show help and available options
+./coverage.sh help
+```
+
+### Manual Coverage Commands
+```bash
+# Generate HTML coverage report (recommended)
+cargo llvm-cov --html
+
+# View summary in terminal
+cargo llvm-cov --summary-only
+
+# Show detailed line-by-line coverage
+cargo llvm-cov --show-missing-lines
+
+# Generate LCOV format for CI/CD integration
+cargo llvm-cov --lcov --output-path coverage.lcov
+```
+
+### View Coverage Reports
+- **HTML Report**: Open `target/llvm-cov/html/index.html` in your browser
+- **Terminal**: Coverage percentages displayed directly in console
+- **CI Integration**: Use LCOV format for services like Codecov
+
+### Automated Coverage (CI/CD)
+- **GitHub Actions**: Coverage runs automatically on every push and PR
+- **Codecov Integration**: Detailed coverage tracking and trending
+- **PR Comments**: Coverage summaries posted directly on pull requests
+- **Coverage Artifacts**: Reports archived for download and analysis
+
 ## Performance
 
 - **Efficient Text Storage**: Line-based representation for O(1) line access
@@ -253,19 +308,21 @@ cargo test -- --nocapture
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Write tests for your changes
-4. Ensure all tests pass (`cargo test`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on:
 
-### Development Guidelines
-- Follow Rust naming conventions
-- Add tests for new functionality
-- Update documentation for user-facing changes
-- Ensure `cargo clippy` passes without warnings
+- 🚀 **Getting Started**: Development setup and workflow
+- ✅ **Quality Checks**: Testing, coverage, formatting, and linting
+- 📋 **Guidelines**: Code standards and best practices
+- 🔄 **CI/CD Process**: Automated quality assurance
+- 🎯 **Contribution Areas**: Where help is most needed
+
+### Quick Start
+1. Fork the repository and create a feature branch
+2. Make your changes with comprehensive tests
+3. Run quality checks: `cargo test && ./coverage.sh && cargo clippy`
+4. Submit a pull request
+
+**All PRs automatically receive quality checks and coverage analysis.**
 
 ## Roadmap
 
@@ -307,3 +364,26 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Vim Documentation](https://vimhelp.org/) - Reference for Vim behavior
 - [ANSI Escape Codes](https://en.wikipedia.org/wiki/ANSI_escape_code) - Terminal control sequences
 - [Rust Book](https://doc.rust-lang.org/book/) - Rust language reference
+
+## Continuous Integration
+
+The project includes comprehensive GitHub Actions workflows for automated quality assurance:
+
+### 🔧 Build Workflow (`.github/workflows/build.yml`)
+- **Cross-platform Builds**: Automatically builds for Linux, Windows, and macOS
+- **Quality Checks**: Runs formatting (`cargo fmt`), linting (`cargo clippy`), and tests
+- **Dependency Caching**: Optimized build times with smart caching
+- **Automated Releases**: Creates GitHub releases with binaries when tags are pushed
+- **Artifact Storage**: Build artifacts available for download
+
+### 📊 Coverage Workflow (`.github/workflows/coverage.yml`)
+- **Automated Coverage**: Runs on every push and pull request
+- **Multiple Reports**: Generates HTML, LCOV, and summary formats
+- **Codecov Integration**: Uploads to Codecov for detailed analysis and trending
+- **PR Comments**: Posts coverage summaries directly on pull requests
+- **GitHub Summaries**: Coverage results visible in Actions tab
+
+### Workflow Triggers
+- **Push to main/develop**: Full build and coverage analysis
+- **Pull Requests**: Quality checks and coverage reporting
+- **Version Tags**: Automated release creation with cross-platform binaries

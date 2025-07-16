@@ -1,0 +1,107 @@
+name: Build RustVim
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+      
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+      
+    - name: Run tests
+      run: cargo test --all-features
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: linux
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            artifact_suffix: windows
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            artifact_suffix: macos
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    # --- 2. Checkout code ----------------------------------------------------
+    - uses: actions/checkout@v4
+
+    # --- 3. Install the Rust toolchain ---------------------------------------
+    - uses: dtolnay/rust-toolchain@stable   # choose `nightly` if you need it
+
+    # --- 4. Build in release mode -------------------------------------------
+    - name: Build with cargo
+      run: cargo build --release
+
+    # --- 5. Package the binary ----------------------------------------------
+    #   Take the crate name from Cargo.toml’s `[package] name = "..."`
+    #   GitHub runners default to UTF-8, so `$(...)` works on all three OSes.
+    - name: Archive binary
+      shell: bash          # forces Bash even on Windows runners
+      run: |
+        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
+                     | jq -r '.packages[0].name')
+        BIN_PATH="target/release/$CRATE_NAME"
+        ARCHIVE="${CRATE_NAME}-${{ matrix.artifact_suffix }}.zip"
+        7z a "$ARCHIVE" "$BIN_PATH"*   # 7-Zip is pre-installed on runners
+        echo "Created $ARCHIVE"
+
+    # --- 6. Upload for download ---------------------------------------------
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ runner.os }}-binary
+        path: "*.zip"
+
+  # release:
+  #   name: Create Release
+  #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Download all artifacts
+  #     uses: actions/download-artifact@v4
+      
+  #   - name: Create Release
+  #     uses: softprops/action-gh-release@v1
+  #     with:
+  #       files: |
+  #         *-binary/*.tar.gz
+  #       draft: false
+  #       prerelease: false
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
