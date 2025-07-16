@@ -100,8 +100,6 @@ jobs:
         if [ -f coverage_summary.txt ]; then
           cat coverage_summary.txt
           echo ""
-          echo "📈 Full coverage report available at: https://codecov.io/gh/${{ github.repository }}"
-          echo "📊 Coverage artifacts uploaded for this run"
         else
           echo "❌ Coverage summary file not found"
         fi
