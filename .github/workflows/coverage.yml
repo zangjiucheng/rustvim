@@ -68,7 +68,7 @@ jobs:
           coverage_summary.txt
           
     - name: Comment coverage on PR
-      # if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request'
       uses: actions/github-script@v6
       with:
         script: |
@@ -93,3 +93,17 @@ jobs:
               body: body
             });
           }
+          
+    - name: Display coverage summary
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "📊 Code Coverage Summary"
+        echo "========================="
+        if [ -f coverage_summary.txt ]; then
+          cat coverage_summary.txt
+          echo ""
+          echo "📈 Full coverage report available at: https://codecov.io/gh/${{ github.repository }}"
+          echo "📊 Coverage artifacts uploaded for this run"
+        else
+          echo "❌ Coverage summary file not found"
+        fi
