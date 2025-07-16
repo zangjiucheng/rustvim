@@ -18,8 +18,8 @@ fn test_file_newline_preservation() {
     // Verify the buffer correctly detected the trailing newline
     assert!(editor.buffer().ends_with_newline);
     assert_eq!(editor.buffer().line_count(), 2);
-    assert_eq!(editor.buffer().get_line(0), Some(&"line1".to_string()));
-    assert_eq!(editor.buffer().get_line(1), Some(&"line2".to_string()));
+    assert_eq!(editor.buffer().get_line(0), Some("line1".to_string()));
+    assert_eq!(editor.buffer().get_line(1), Some("line2".to_string()));
     
     // Save the file and check that the newline is preserved
     let output_file = temp_dir.path().join("output_with_newline.txt");
@@ -41,8 +41,8 @@ fn test_file_newline_preservation() {
     // Verify the buffer correctly detected NO trailing newline
     assert!(!editor2.buffer().ends_with_newline);
     assert_eq!(editor2.buffer().line_count(), 2);
-    assert_eq!(editor2.buffer().get_line(0), Some(&"line1".to_string()));
-    assert_eq!(editor2.buffer().get_line(1), Some(&"line2".to_string()));
+    assert_eq!(editor2.buffer().get_line(0), Some("line1".to_string()));
+    assert_eq!(editor2.buffer().get_line(1), Some("line2".to_string()));
     
     // Save the file and check that no newline is added
     let output_file2 = temp_dir.path().join("output_without_newline.txt");
@@ -90,7 +90,7 @@ fn test_empty_file_handling() {
     // Empty files should not end with newline
     assert!(!editor.buffer().ends_with_newline);
     assert_eq!(editor.buffer().line_count(), 1);
-    assert_eq!(editor.buffer().get_line(0), Some(&String::new()));
+    assert_eq!(editor.buffer().get_line(0), Some(String::new()));
     
     // Save and verify it stays empty
     let output_empty = temp_dir.path().join("output_empty.txt");
@@ -119,7 +119,7 @@ fn test_single_newline_file() {
     // Should end with newline and have one empty line
     assert!(editor.buffer().ends_with_newline);
     assert_eq!(editor.buffer().line_count(), 1);
-    assert_eq!(editor.buffer().get_line(0), Some(&String::new()));
+    assert_eq!(editor.buffer().get_line(0), Some(String::new()));
     
     // Save and verify newline is preserved
     let output_newline = temp_dir.path().join("output_newline.txt");

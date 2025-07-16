@@ -1,3 +1,5 @@
+use crate::gap_buffer::GapBufferLine;
+
 /// Represents a position in the buffer
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Position {
@@ -12,9 +14,10 @@ impl Position {
 }
 
 /// Text buffer for storing and editing text content
+/// Now uses GapBufferLine for efficient intra-line editing
 pub struct Buffer {
-    /// Lines of text (each String represents one line)
-    lines: Vec<String>,
+    /// Lines of text (each GapBufferLine for efficient editing)
+    lines: Vec<GapBufferLine>,
     /// Whether the file ended with a newline when loaded
     pub ends_with_newline: bool,
 }
@@ -23,7 +26,7 @@ impl Buffer {
     /// Create a new empty buffer
     pub fn new() -> Self {
         Self {
-            lines: vec![String::new()], // Start with one empty line
+            lines: vec![GapBufferLine::new()], // Start with one empty line
             ends_with_newline: true, // New files typically end with newline
         }
     }
@@ -33,14 +36,14 @@ impl Buffer {
         // Check if the original content ended with a newline
         let ends_with_newline = content.ends_with('\n');
         
-        let lines: Vec<String> = content
+        let lines: Vec<GapBufferLine> = content
             .lines()
-            .map(|line| line.to_string())
+            .map(|line| GapBufferLine::from_string(line))
             .collect();
             
         // Ensure at least one line exists
         let lines = if lines.is_empty() {
-            vec![String::new()]
+            vec![GapBufferLine::new()]
         } else {
             lines
         };
@@ -57,71 +60,75 @@ impl Buffer {
     }
     
     /// Get a line at the specified index
-    pub fn get_line(&self, index: usize) -> Option<&String> {
-        self.lines.get(index)
+    pub fn get_line(&self, index: usize) -> Option<String> {
+        self.lines.get(index).map(|line| line.to_string())
     }
     
     /// Get the length of a specific line (in characters)
     pub fn line_length(&self, index: usize) -> usize {
-        self.lines.get(index).map_or(0, |line| line.chars().count())
+        self.lines.get(index).map_or(0, |line| line.len())
     }
     
     /// Insert a character at the specified position
     pub fn insert_char(&mut self, pos: Position, ch: char) {
         if pos.row < self.lines.len() {
             let line = &mut self.lines[pos.row];
-            // Convert character position to byte position
-            let byte_pos = line.char_indices().nth(pos.col).map(|(i, _)| i).unwrap_or(line.len());
-            if byte_pos <= line.len() {
-                line.insert(byte_pos, ch);
-            }
+            line.insert(pos.col, ch);
         }
     }
     
     /// Delete a character at the specified position
     pub fn delete_char(&mut self, pos: Position) -> Option<char> {
-        if pos.row < self.lines.len() {
-            let line = &mut self.lines[pos.row];
-            // Convert character position to byte position
-            if let Some((byte_pos, ch)) = line.char_indices().nth(pos.col) {
-                line.remove(byte_pos);
-                return Some(ch);
-            } else if pos.col == line.chars().count() && pos.row + 1 < self.lines.len() {
-                // Delete newline - merge with next line
-                let next_line = self.lines.remove(pos.row + 1);
-                self.lines[pos.row].push_str(&next_line);
-                return Some('\n');
-            }
+        if pos.row >= self.lines.len() {
+            return None;
         }
+        
+        // Check if we're deleting within the line
+        if pos.col < self.lines[pos.row].len() {
+            return self.lines[pos.row].delete(pos.col);
+        }
+        
+        // Check if we're deleting newline (merge with next line)
+        if pos.col == self.lines[pos.row].len() && pos.row + 1 < self.lines.len() {
+            let line_len = self.lines[pos.row].len(); // Store length before borrow
+            let next_line = self.lines.remove(pos.row + 1);
+            let next_line_str = next_line.to_string();
+            self.lines[pos.row].insert_str(line_len, &next_line_str);
+            return Some('\n');
+        }
+        
         None
     }
     
     /// Insert a new line at the specified position
     pub fn insert_newline(&mut self, pos: Position) {
         if pos.row < self.lines.len() {
-            let current_line = self.lines[pos.row].clone();
-            let char_count = current_line.chars().count();
-            let split_pos = pos.col.min(char_count);
+            let current_line = &self.lines[pos.row];
+            let line_len = current_line.len();
+            let split_pos = pos.col.min(line_len);
             
-            // Find the byte position for the character position
-            let byte_pos = if split_pos == 0 {
-                0
-            } else if split_pos >= char_count {
-                current_line.len()
+            // Get the part after the split position
+            let after_split = if split_pos < line_len {
+                current_line.substring(split_pos, line_len)
             } else {
-                current_line.char_indices().nth(split_pos).map(|(i, _)| i).unwrap_or(current_line.len())
+                String::new()
             };
             
-            let (before, after) = current_line.split_at(byte_pos);
+            // Truncate current line at split position
+            let before_split = current_line.substring(0, split_pos);
+            self.lines[pos.row] = GapBufferLine::from_string(&before_split);
             
-            self.lines[pos.row] = before.to_string();
-            self.lines.insert(pos.row + 1, after.to_string());
+            // Insert new line with the after part
+            self.lines.insert(pos.row + 1, GapBufferLine::from_string(&after_split));
         }
     }
     
     /// Convert buffer to string (for saving to file)
     pub fn to_string(&self) -> String {
-        self.lines.join("\n")
+        self.lines.iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
     }
     
     /// Check if the buffer is empty (only contains one empty line)
@@ -132,7 +139,7 @@ impl Buffer {
     /// Insert a new line at the specified row index
     pub fn insert_line(&mut self, row: usize, content: String) {
         if row <= self.lines.len() {
-            self.lines.insert(row, content);
+            self.lines.insert(row, GapBufferLine::from_string(&content));
         }
     }
     
@@ -140,7 +147,7 @@ impl Buffer {
     /// Returns the removed line content if successful
     pub fn remove_line(&mut self, row: usize) -> Option<String> {
         if row < self.lines.len() && self.lines.len() > 1 {
-            Some(self.lines.remove(row))
+            Some(self.lines.remove(row).to_string())
         } else {
             None
         }
@@ -149,7 +156,7 @@ impl Buffer {
     /// Clear the content of a line but keep the line in the buffer
     pub fn clear_line(&mut self, row: usize) -> Option<String> {
         if row < self.lines.len() {
-            let old_content = self.lines[row].clone();
+            let old_content = self.lines[row].to_string();
             self.lines[row].clear();
             Some(old_content)
         } else {
@@ -161,7 +168,7 @@ impl Buffer {
     pub fn get_char(&self, pos: (usize, usize)) -> Option<char> {
         let (row, col) = pos;
         if let Some(line) = self.lines.get(row) {
-            line.chars().nth(col)
+            line.get_char(col)
         } else {
             None
         }
@@ -182,11 +189,11 @@ impl Buffer {
         if from_row == to_row {
             // Single line extraction
             if let Some(line) = self.lines.get(from_row) {
-                let chars: Vec<char> = line.chars().collect();
-                let start_idx = from_col.min(chars.len());
-                let end_idx = to_col.min(chars.len());
+                let line_len = line.len();
+                let start_idx = from_col.min(line_len);
+                let end_idx = to_col.min(line_len);
                 if start_idx < end_idx {
-                    chars[start_idx..end_idx].iter().collect()
+                    line.substring(start_idx, end_idx)
                 } else {
                     String::new()
                 }
@@ -199,10 +206,10 @@ impl Buffer {
             
             // First line: from start_col to end of line
             if let Some(line) = self.lines.get(from_row) {
-                let chars: Vec<char> = line.chars().collect();
-                let start_idx = from_col.min(chars.len());
-                if start_idx < chars.len() {
-                    result.push_str(&chars[start_idx..].iter().collect::<String>());
+                let line_len = line.len();
+                let start_idx = from_col.min(line_len);
+                if start_idx < line_len {
+                    result.push_str(&line.substring(start_idx, line_len));
                 }
                 result.push('\n');
             }
@@ -210,7 +217,7 @@ impl Buffer {
             // Middle lines: entire lines
             for row in (from_row + 1)..to_row {
                 if let Some(line) = self.lines.get(row) {
-                    result.push_str(line);
+                    result.push_str(&line.to_string());
                     result.push('\n');
                 }
             }
@@ -218,10 +225,10 @@ impl Buffer {
             // Last line: from start to end_col
             if to_row < self.lines.len() {
                 if let Some(line) = self.lines.get(to_row) {
-                    let chars: Vec<char> = line.chars().collect();
-                    let end_idx = to_col.min(chars.len());
+                    let line_len = line.len();
+                    let end_idx = to_col.min(line_len);
                     if end_idx > 0 {
-                        result.push_str(&chars[0..end_idx].iter().collect::<String>());
+                        result.push_str(&line.substring(0, end_idx));
                     }
                 }
             }
@@ -237,7 +244,7 @@ pub trait TextBuffer {
     fn delete_char(&mut self, pos: Position) -> Option<char>;
     fn insert_newline(&mut self, pos: Position);
     fn line_count(&self) -> usize;
-    fn get_line(&self, index: usize) -> Option<&String>;
+    fn get_line(&self, index: usize) -> Option<String>;
 }
 
 impl TextBuffer for Buffer {
@@ -257,7 +264,7 @@ impl TextBuffer for Buffer {
         self.line_count()
     }
     
-    fn get_line(&self, index: usize) -> Option<&String> {
+    fn get_line(&self, index: usize) -> Option<String> {
         self.get_line(index)
     }
 }

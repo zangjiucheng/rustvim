@@ -312,10 +312,10 @@ impl Editor {
                                 self.terminal.write(after)?;
                             }
                         } else {
-                            self.draw_line_with_visual_highlight(line, buffer_row, cols)?;
+                            self.draw_line_with_visual_highlight(&line, buffer_row, cols)?;
                         }
                     } else {
-                        self.draw_line_with_visual_highlight(line, buffer_row, cols)?;
+                        self.draw_line_with_visual_highlight(&line, buffer_row, cols)?;
                     }
                 }
             } else {
@@ -1429,7 +1429,7 @@ impl Editor {
         
         for row in start_row..=end_row {
             if let Some(line) = buffer.get_line(row) {
-                text.push_str(line);
+                text.push_str(&line);
                 text.push('\n');
             }
         }

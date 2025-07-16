@@ -20,7 +20,7 @@ impl Editor {
         let mut content = String::new();
         for i in 0..self.buffer().line_count() {
             if let Some(line) = self.buffer().get_line(i) {
-                content.push_str(line);
+                content.push_str(&line);
                 if i < self.buffer().line_count() - 1 {
                     content.push('\n');
                 }

@@ -296,8 +296,8 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
         
         // Verify the deletion
         assert_eq!(editor.buffer().line_count(), 2);
-        assert_eq!(editor.buffer().get_line(0).unwrap(), &format!("buffer {} line 1", buffer_idx));
-        assert_eq!(editor.buffer().get_line(1).unwrap(), &format!("buffer {} line 3", buffer_idx));
+        assert_eq!(editor.buffer().get_line(0).unwrap(), format!("buffer {} line 1", buffer_idx));
+        assert_eq!(editor.buffer().get_line(1).unwrap(), format!("buffer {} line 3", buffer_idx));
     }
     
     // Now test undo in each buffer
@@ -310,7 +310,7 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
         
         // Verify restoration
         assert_eq!(editor.buffer().line_count(), 3);
-        assert_eq!(editor.buffer().get_line(1).unwrap(), &format!("buffer {} line 2", buffer_idx));
+        assert_eq!(editor.buffer().get_line(1).unwrap(), format!("buffer {} line 2", buffer_idx));
     }
     
     // Test redo in reverse order
@@ -323,8 +323,8 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
         
         // Verify deletion is back
         assert_eq!(editor.buffer().line_count(), 2);
-        assert_eq!(editor.buffer().get_line(0).unwrap(), &format!("buffer {} line 1", buffer_idx));
-        assert_eq!(editor.buffer().get_line(1).unwrap(), &format!("buffer {} line 3", buffer_idx));
+        assert_eq!(editor.buffer().get_line(0).unwrap(), format!("buffer {} line 1", buffer_idx));
+        assert_eq!(editor.buffer().get_line(1).unwrap(), format!("buffer {} line 3", buffer_idx));
     }
     
     // Final verification: each buffer should maintain independent history
