@@ -16,7 +16,7 @@ Thank you for your interest in contributing to RustVim! This guide will help you
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- **Rust 1.70+** (install from [rustup.rs](https://rustup.rs/))
+- **Rust 1.85+** (install from [rustup.rs](https://rustup.rs/))
 - **Git** for version control
 
 ### Local Development

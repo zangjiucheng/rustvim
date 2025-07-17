@@ -164,7 +164,7 @@ mod status_tests {
         for i in 1..4 {
             let buffer_info = BufferInfo {
                 buffer: Buffer::new(),
-                filename: Some(format!("file{}.txt", i)),
+                filename: Some(format!("file{i}.txt")),
                 modified: i % 2 == 0, // Alternate modified state
                 cursor: Cursor::new(),
                 scroll_offset: 0,

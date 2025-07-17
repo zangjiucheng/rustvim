@@ -478,7 +478,7 @@ fn test_line_number_calculations() {
         // We can't easily test the actual drawing without a real terminal,
         // but we can verify that the line count calculation works
         let line_count = editor.buffer().line_count();
-        let max_line_num_width = format!("{}", line_count).len();
+        let max_line_num_width = format!("{line_count}").len();
         assert_eq!(max_line_num_width, 2); // 15 has 2 digits
     }));
 

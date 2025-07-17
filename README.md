@@ -46,7 +46,7 @@ A comprehensive vim-like text editor implemented in Rust, featuring multiple edi
 ## Installation
 
 ### Prerequisites
-- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
+- Rust 1.85+ (install from [rustup.rs](https://rustup.rs/))
 
 ### Build from Source
 ```bash
@@ -393,7 +393,7 @@ The project includes comprehensive GitHub Actions workflows for automated qualit
 ## Development Setup
 
 ### Prerequisites
-- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
+- Rust 1.85+ (install from [rustup.rs](https://rustup.rs/))
 - Git for version control
 
 ### Setting Up Pre-commit Hooks

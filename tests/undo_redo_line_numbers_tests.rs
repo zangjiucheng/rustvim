@@ -62,7 +62,7 @@ fn test_coordinate_conversion_with_line_numbers() {
     // Add some content to ensure line numbers are calculated
     let buffer = &mut editor.buffers[0].buffer;
     for i in 1..=5 {
-        let line_text = format!("Line {}", i);
+        let line_text = format!("Line {i}");
         for (j, ch) in line_text.chars().enumerate() {
             buffer.insert_char(Position::new(i - 1, j), ch);
         }
@@ -77,7 +77,7 @@ fn test_coordinate_conversion_with_line_numbers() {
 
     // Test screen to buffer conversion
     let screen_col = 10;
-    println!("Gutter width: {}", gutter_width);
+    println!("Gutter width: {gutter_width}");
     if let Some((_, buffer_col)) = editor.screen_to_buffer_coords(0, screen_col) {
         println!(
             "Screen col: {}, Buffer col: {}, Expected: {}",
@@ -105,7 +105,7 @@ fn test_undo_redo_status_messages() {
     editor.undo();
     assert!(editor.status_msg.is_some());
     let msg = editor.status_msg.as_ref().unwrap();
-    println!("Undo message: {}", msg);
+    println!("Undo message: {msg}");
     assert!(
         msg.contains("oldest change")
             || msg.contains("no changes")
@@ -116,7 +116,7 @@ fn test_undo_redo_status_messages() {
     editor.redo();
     assert!(editor.status_msg.is_some());
     let msg = editor.status_msg.as_ref().unwrap();
-    println!("Redo message: {}", msg);
+    println!("Redo message: {msg}");
     assert!(msg.contains("newest change") || msg.contains("Nothing to redo"));
 }
 

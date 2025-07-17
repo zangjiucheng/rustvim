@@ -119,8 +119,7 @@ fn test_word_motions_with_mixed_punctuation() {
         assert_eq!(
             editor.cursor().col,
             expected_col,
-            "Failed at position {}",
-            expected_col
+            "Failed at position {expected_col}"
         );
     }
 }
@@ -174,8 +173,7 @@ fn test_word_motions_across_symbols() {
         assert_eq!(
             editor.cursor().col,
             expected_col,
-            "Failed at position {}",
-            expected_col
+            "Failed at position {expected_col}"
         );
     }
 }

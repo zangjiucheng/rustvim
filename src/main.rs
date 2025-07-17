@@ -22,11 +22,11 @@ fn main() {
                 Ok(()) => {
                     // Get line count for the loaded buffer
                     if let Some((_, line_count)) = editor.get_buffer_info(filename) {
-                        println!("Loaded file: {} ({} lines)", filename, line_count);
+                        println!("Loaded file: {filename} ({line_count} lines)");
                     }
                 }
                 Err(e) => {
-                    eprintln!("Warning: Could not load file '{}': {}", filename, e);
+                    eprintln!("Warning: Could not load file '{filename}': {e}");
                 }
             }
         }
@@ -38,7 +38,7 @@ fn main() {
 
     // Run the editor
     if let Err(e) = editor.run() {
-        eprintln!("Editor error: {}", e);
+        eprintln!("Editor error: {e}");
         std::process::exit(1);
     }
 }
