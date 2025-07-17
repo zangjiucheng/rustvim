@@ -535,7 +535,11 @@ impl Editor {
         } else {
             ""
         };
-        let buffer_info = format!("({}/{})", self.current_buffer + 1, self.buffers.len());
+        let buffer_info = format!(
+            "[Buf {} of {}]",
+            self.current_buffer + 1,
+            self.buffers.len()
+        );
         let mode = match self.mode {
             Mode::Insert => "-- INSERT --".to_string(),
             Mode::Visual => {
