@@ -21,6 +21,7 @@ A comprehensive vim-like text editor implemented in Rust, featuring modal editin
 - **Bell/Flash Feedback**: Immediate feedback for invalid keys
 - **Configurable Keymap**: Foundation for custom keybindings
 - **TOML Configuration**: Human-readable `~/.rustvimrc` config file, runtime `:set` commands
+- **Plugin System**: Native Rust plugin architecture for extending functionality
 
 ## Quick Start
 
@@ -98,6 +99,9 @@ search_highlight = true
 | `:q`        | Quit                         |
 | `:wq`       | Save and quit                |
 | `:e filename`| Edit new file               |
+| `:wc`       | Word count (plugin)          |
+| `:hello`    | Hello world (plugin)         |
+| `:sort`     | Sort lines (plugin)          |
 
 ### Search
 | Command     | Action                       |
@@ -120,7 +124,11 @@ src/
 ├── keymap.rs         # Key mapping system
 ├── io.rs             # File I/O
 ├── history.rs        # Undo/redo system
-└── config.rs         # Configuration system
+├── config.rs         # Configuration system
+├── plugin.rs         # Plugin system core
+└── plugins/          # Plugin implementations
+    ├── mod.rs        # Plugin module organization
+    └── utils.rs      # Built-in utility plugins
 
 tests/                # 160+ tests for reliability
 ```
@@ -133,6 +141,7 @@ tests/                # 160+ tests for reliability
 
 ## Documentation & Resources
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — System design overview
+- **[docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md)** — Plugin development guide
 - **[docs/daily-summaries/](docs/daily-summaries/)** — Day-by-day progress
 - **[.rustvimrc.example](.rustvimrc.example)** — Example config file
 - **Vim Documentation** — [vimhelp.org](https://vimhelp.org/)
