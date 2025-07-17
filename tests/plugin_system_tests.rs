@@ -148,7 +148,7 @@ fn test_plugin_system_key_commands() {
     let mut editor = Editor::new();
     let result = registry.handle_key_command(Mode::Normal, &Key::Char('x'), &mut editor);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), true);
+    assert!(result.unwrap());
 
     // Check that the status message was set
     assert!(editor.status_msg.is_some());
@@ -159,7 +159,7 @@ fn test_plugin_system_key_commands() {
     // Test non-existent key command
     let result = registry.handle_key_command(Mode::Normal, &Key::Char('z'), &mut editor);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), false);
+    assert!(!result.unwrap());
 }
 
 #[test]
