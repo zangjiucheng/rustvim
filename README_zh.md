@@ -1,4 +1,4 @@
-<!-- Language: [English](README.md) | [中文](README_zh.md) -->
+[<img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge">](README.md) 
 
 # RustVim - 一个用 Rust 实现的类 Vim 文本编辑器
 

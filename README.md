@@ -1,4 +1,5 @@
-[<img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge">](README.md) [<img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge">](README_zh.md)
+[<img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge">](README_zh.md)
+
 # RustVim - A Vim-like Text Editor in Rust
 
 A comprehensive vim-like text editor implemented in Rust, featuring multiple editing modes, visual selection (including block mode), file operations, search functionality, and a robust undo/redo system.
