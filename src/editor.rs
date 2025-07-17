@@ -1,6 +1,6 @@
 use crate::buffer::Buffer;
 use crate::commands::Command;
-use crate::history::History;
+use crate::history::{History, InsertModeGroup};
 use crate::keymap::KeymapProcessor;
 use crate::terminal::{CursorShape, Terminal};
 use std::time::Instant;
@@ -115,7 +115,10 @@ pub struct Editor {
     /// Status message timer
     pub status_msg_time: Option<Instant>,
 
-    /// Configuration flags
+    /// Editor configuration
+    pub config: crate::config::EditorConfig,
+
+    /// Configuration flags (deprecated - moved to config)
     pub show_line_numbers: bool,
 }
 
@@ -179,6 +182,10 @@ impl Editor {
             history: History::new(),
         }];
 
+        // Load configuration from ~/.rustvimrc if it exists, otherwise use defaults
+        let config = crate::config::EditorConfig::load_default()
+            .unwrap_or_else(|_| crate::config::EditorConfig::default());
+
         Self {
             mode: Mode::Normal,
             buffers,
@@ -199,7 +206,8 @@ impl Editor {
             visual_line_mode: false,
             visual_block_mode: false,
             status_msg_time: None,
-            show_line_numbers: false,
+            config: config.clone(),
+            show_line_numbers: config.show_line_numbers, // Sync with config
         }
     }
 
@@ -271,8 +279,25 @@ impl Editor {
                 continue;
             }
 
-            // Handle mode-specific commands using unified keymap processor
-            self.handle_keymap_input(&key)?;
+            // Handle mode-specific commands using keymap system
+            // We need to extract the keymap processor to avoid borrowing issues
+            let mut temp_keymap = std::mem::take(&mut self.keymap_processor);
+            let result = temp_keymap.process_key(self, &key);
+            self.keymap_processor = temp_keymap;
+
+            match result {
+                Ok(true) => {
+                    // Key was handled successfully
+                }
+                Ok(false) => {
+                    // Key was not recognized - ring bell for invalid input
+                    let _ = self.bell();
+                }
+                Err(err) => {
+                    // Error processing key - show error message
+                    self.set_status_message(format!("Error: {err}"));
+                }
+            }
 
             // Refresh screen after each key press
             self.refresh_screen()?;
@@ -296,7 +321,11 @@ impl Editor {
         self.draw_status_line()?;
 
         // Position cursor at editor cursor position (accounting for line number gutter)
-        let screen_row = self.cursor().row.saturating_sub(self.scroll_offset()) + 1;
+        let screen_row = self.buffers[self.current_buffer]
+            .cursor
+            .row
+            .saturating_sub(self.buffers[self.current_buffer].scroll_offset)
+            + 1;
         let gutter_width = self.line_number_gutter_width();
         let screen_col = self.cursor().col + 1 + gutter_width;
         self.terminal.move_cursor(screen_row, screen_col)?;
@@ -322,11 +351,11 @@ impl Editor {
         let content_rows = rows.saturating_sub(1);
 
         for screen_row in 0..content_rows {
-            let buffer_row = screen_row + self.scroll_offset();
+            let buffer_row = screen_row + self.buffers[self.current_buffer].scroll_offset;
 
             // Draw line number if enabled
-            if self.show_line_numbers {
-                if buffer_row < self.buffer().line_count() {
+            if self.config.show_line_numbers {
+                if buffer_row < self.buffers[self.current_buffer].buffer.line_count() {
                     let line_num =
                         format!("{:>width$} ", buffer_row + 1, width = line_num_width - 1);
                     self.terminal.write(&line_num)?;
@@ -338,9 +367,12 @@ impl Editor {
 
             let available_cols = cols.saturating_sub(line_num_width);
 
-            if buffer_row < self.buffer().line_count() {
+            if buffer_row < self.buffers[self.current_buffer].buffer.line_count() {
                 // Draw actual buffer line
-                if let Some(line) = self.buffer().get_line(buffer_row) {
+                if let Some(line) = self.buffers[self.current_buffer]
+                    .buffer
+                    .get_line(buffer_row)
+                {
                     // Check if this line has a search match to highlight
                     if let Some((match_row, match_col, match_len)) = self.search_match {
                         if buffer_row == match_row {
@@ -529,7 +561,8 @@ impl Editor {
         }
 
         // Create regular status line content
-        let filename = self.filename().as_deref().unwrap_or("[No Name]");
+        let filename_binding = self.filename();
+        let filename = filename_binding.unwrap_or("[No Name]");
         let modified = if self.is_modified() {
             " [Modified]"
         } else {
@@ -556,7 +589,10 @@ impl Editor {
             Mode::Normal => "".to_string(), // Normal mode shows no mode indicator
         };
         let position = format!("{}:{}", self.cursor().row + 1, self.cursor().col + 1);
-        let lines = format!("{} lines", self.buffer().line_count());
+        let lines = format!(
+            "{} lines",
+            self.buffers[self.current_buffer].buffer.line_count()
+        );
 
         let left = format!("{filename}{modified} {buffer_info} {mode}");
         let right = format!("{position} - {lines}");
@@ -583,13 +619,19 @@ impl Editor {
         let content_rows = rows.saturating_sub(1); // Reserve space for status line
 
         // Scroll up if cursor is above visible area
-        if self.cursor().row < self.scroll_offset() {
-            self.set_scroll_offset(self.cursor().row);
+        if self.buffers[self.current_buffer].cursor.row
+            < self.buffers[self.current_buffer].scroll_offset
+        {
+            self.buffers[self.current_buffer].scroll_offset =
+                self.buffers[self.current_buffer].cursor.row;
         }
 
         // Scroll down if cursor is below visible area
-        if self.cursor().row >= self.scroll_offset() + content_rows {
-            self.set_scroll_offset(self.cursor().row - content_rows + 1);
+        if self.buffers[self.current_buffer].cursor.row
+            >= self.buffers[self.current_buffer].scroll_offset + content_rows
+        {
+            self.buffers[self.current_buffer].scroll_offset =
+                self.buffers[self.current_buffer].cursor.row - content_rows + 1;
         }
     }
 
@@ -1095,107 +1137,136 @@ impl Editor {
         self.keymap_processor = KeymapProcessor::new();
     }
 
-    // ==== Accessor methods for buffer, cursor, and state ====
+    // ==== Configuration Management ====
 
-    /// Get reference to current buffer
-    pub fn buffer(&self) -> &Buffer {
+    /// Load configuration from default location (~/.rustvimrc)
+    pub fn load_config(&mut self) -> Result<(), String> {
+        match crate::config::EditorConfig::load_default() {
+            Ok(config) => {
+                self.config = config;
+                // Update deprecated fields for compatibility
+                self.show_line_numbers = self.config.show_line_numbers;
+                Ok(())
+            }
+            Err(e) => Err(format!("Failed to load config: {e}")),
+        }
+    }
+
+    /// Save current configuration to default location
+    pub fn save_config(&self) -> Result<(), String> {
+        self.config
+            .save_default()
+            .map_err(|e| format!("Failed to save config: {e}"))
+    }
+
+    /// Get reference to current configuration
+    pub fn config(&self) -> &crate::config::EditorConfig {
+        &self.config
+    }
+
+    /// Get mutable reference to current configuration
+    pub fn config_mut(&mut self) -> &mut crate::config::EditorConfig {
+        &mut self.config
+    }
+
+    /// Update configuration with new config
+    pub fn set_config(&mut self, config: crate::config::EditorConfig) {
+        self.config = config;
+        self.refresh_screen().unwrap();
+    }
+
+    // Helper methods for internal use
+    pub fn buffer(&self) -> &crate::buffer::Buffer {
         &self.buffers[self.current_buffer].buffer
     }
 
-    /// Get mutable reference to current buffer
-    pub fn buffer_mut(&mut self) -> &mut Buffer {
+    pub fn buffer_mut(&mut self) -> &mut crate::buffer::Buffer {
         &mut self.buffers[self.current_buffer].buffer
     }
 
-    /// Get reference to current cursor
     pub fn cursor(&self) -> &Cursor {
         &self.buffers[self.current_buffer].cursor
     }
 
-    /// Get mutable reference to current cursor
     pub fn cursor_mut(&mut self) -> &mut Cursor {
         &mut self.buffers[self.current_buffer].cursor
     }
 
-    /// Get current filename
-    pub fn filename(&self) -> &Option<String> {
-        &self.buffers[self.current_buffer].filename
+    pub fn filename(&self) -> Option<&str> {
+        self.buffers[self.current_buffer].filename.as_deref()
     }
 
-    /// Set filename for current buffer
     pub fn set_filename(&mut self, filename: Option<String>) {
         self.buffers[self.current_buffer].filename = filename;
     }
 
-    /// Check if current buffer is modified
     pub fn is_modified(&self) -> bool {
         self.buffers[self.current_buffer].modified
     }
 
-    /// Set modified flag for current buffer
     pub fn set_modified(&mut self, modified: bool) {
         self.buffers[self.current_buffer].modified = modified;
     }
 
-    /// Get current scroll offset
-    pub fn scroll_offset(&self) -> usize {
-        self.buffers[self.current_buffer].scroll_offset
-    }
-
-    /// Set scroll offset for current buffer
-    pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.buffers[self.current_buffer].scroll_offset = offset;
-    }
-
-    /// Get mutable reference to current buffer's history
-    pub fn history_mut(&mut self) -> &mut History {
+    pub fn history_mut(&mut self) -> &mut crate::history::History {
         &mut self.buffers[self.current_buffer].history
     }
 
-    /// Get reference to current buffer's history
-    pub fn history(&self) -> &History {
+    pub fn history(&self) -> &crate::history::History {
         &self.buffers[self.current_buffer].history
     }
 
-    /// Get buffer information by filename (returns buffer index and line count)
-    pub fn get_buffer_info(&self, filename: &str) -> Option<(usize, usize)> {
-        for (index, buffer) in self.buffers.iter().enumerate() {
-            if let Some(ref buf_filename) = buffer.filename {
-                if buf_filename == filename {
-                    return Some((index, buffer.buffer.line_count()));
-                }
+    // Line number gutter width calculation
+    pub fn line_number_gutter_width(&self) -> usize {
+        if self.show_line_numbers || self.config.show_line_numbers {
+            let line_count = self.buffers[self.current_buffer].buffer.line_count();
+            if line_count == 0 {
+                3
+            } else {
+                let digits = (line_count + 1).to_string().len();
+                digits + 1 // +1 for space after line number
             }
+        } else {
+            0
         }
-        None
     }
 
-    // ==== File I/O methods (implemented in io.rs) ====
-
-    /// Add a new buffer and switch to it
-    pub fn add_buffer(&mut self, buffer_info: BufferInfo) {
-        self.buffers.push(buffer_info);
-        self.current_buffer = self.buffers.len() - 1;
+    // Cursor management
+    pub fn clamp_cursor_to_buffer(&mut self) {
+        let line_count = self.buffers[self.current_buffer].buffer.line_count();
+        if line_count == 0 {
+            self.buffers[self.current_buffer].cursor.row = 0;
+            self.buffers[self.current_buffer].cursor.col = 0;
+        } else {
+            self.buffers[self.current_buffer].cursor.row = self.buffers[self.current_buffer]
+                .cursor
+                .row
+                .min(line_count - 1);
+            let line_len = self.buffers[self.current_buffer]
+                .buffer
+                .line_length(self.buffers[self.current_buffer].cursor.row);
+            self.buffers[self.current_buffer].cursor.col =
+                self.buffers[self.current_buffer].cursor.col.min(line_len);
+        }
     }
 
-    /// Switch to next buffer
+    // Buffer management methods
     pub fn next_buffer(&mut self) {
         if self.buffers.len() > 1 {
             self.current_buffer = (self.current_buffer + 1) % self.buffers.len();
         }
     }
 
-    /// Switch to previous buffer
     pub fn prev_buffer(&mut self) {
         if self.buffers.len() > 1 {
-            self.current_buffer = if self.current_buffer == 0 {
-                self.buffers.len() - 1
+            if self.current_buffer == 0 {
+                self.current_buffer = self.buffers.len() - 1;
             } else {
-                self.current_buffer - 1
-            };
+                self.current_buffer -= 1;
+            }
         }
     }
 
-    /// Switch to specific buffer by index
     pub fn switch_to_buffer(&mut self, index: usize) -> bool {
         if index < self.buffers.len() {
             self.current_buffer = index;
@@ -1205,157 +1276,92 @@ impl Editor {
         }
     }
 
-    /// List all buffers for display
     pub fn list_buffers(&self) -> Vec<String> {
         self.buffers
             .iter()
             .enumerate()
             .map(|(i, buf)| {
                 let name = buf.filename.as_deref().unwrap_or("[No Name]");
-                let modified = if buf.modified { "+" } else { "" };
+                let modified = if buf.modified { "*" } else { "" };
                 let current = if i == self.current_buffer { "%" } else { " " };
-                format!("{}{} {} {}", i + 1, current, name, modified)
+                format!("{} {:2}: {}{}", current, i + 1, name, modified)
             })
             .collect()
     }
 
-    /// Calculate the width of the line number gutter
-    pub fn line_number_gutter_width(&self) -> usize {
-        if self.show_line_numbers {
-            let max_line_num = self.buffer().line_count();
-            format!("{max_line_num}").len() + 1 // +1 for space
-        } else {
-            0
-        }
+    pub fn add_buffer(&mut self, buffer_info: BufferInfo) {
+        self.buffers.push(buffer_info);
+        self.current_buffer = self.buffers.len() - 1;
     }
 
-    /// Convert screen coordinates to buffer coordinates (accounting for line number gutter)
-    /// Returns None if the coordinates are in the line number gutter
+    // Get buffer info by filename
+    pub fn get_buffer_info(&self, filename: &str) -> Option<(usize, usize)> {
+        for (i, buf) in self.buffers.iter().enumerate() {
+            if let Some(ref name) = buf.filename {
+                if name == filename {
+                    return Some((i, buf.buffer.line_count()));
+                }
+            }
+        }
+        None
+    }
+
+    // Scroll methods
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.buffers[self.current_buffer].scroll_offset = offset;
+    }
+
+    // Coordinate conversion methods for UI tests
+    pub fn buffer_to_screen_coords(&self, buffer_row: usize, buffer_col: usize) -> (usize, usize) {
+        let gutter_width = self.line_number_gutter_width();
+        let screen_row =
+            buffer_row.saturating_sub(self.buffers[self.current_buffer].scroll_offset) + 1;
+        let screen_col = buffer_col + gutter_width + 1;
+        (screen_row, screen_col)
+    }
+
     pub fn screen_to_buffer_coords(
         &self,
         screen_row: usize,
         screen_col: usize,
     ) -> Option<(usize, usize)> {
-        let gutter_width = self.line_number_gutter_width();
-
-        // Check if click is in the line number gutter
-        if screen_col <= gutter_width {
-            return None; // Click is in the gutter area
+        if screen_row == 0 || screen_col == 0 {
+            return None;
         }
 
-        // Convert to buffer coordinates
-        let buffer_row = screen_row.saturating_sub(1) + self.scroll_offset();
-        let buffer_col = screen_col.saturating_sub(1 + gutter_width);
+        let gutter_width = self.line_number_gutter_width();
+        if screen_col <= gutter_width {
+            return None; // Click is in the gutter
+        }
+
+        let buffer_row = (screen_row - 1) + self.buffers[self.current_buffer].scroll_offset;
+        let buffer_col = screen_col - gutter_width - 1;
+
+        // Check if the buffer row is valid
+        if buffer_row >= self.buffers[self.current_buffer].buffer.line_count() {
+            return None;
+        }
 
         Some((buffer_row, buffer_col))
     }
 
-    /// Convert buffer coordinates to screen coordinates (accounting for line number gutter)
-    pub fn buffer_to_screen_coords(&self, buffer_row: usize, buffer_col: usize) -> (usize, usize) {
-        let gutter_width = self.line_number_gutter_width();
-        let screen_row = buffer_row.saturating_sub(self.scroll_offset()) + 1;
-        let screen_col = buffer_col + 1 + gutter_width;
-        (screen_row, screen_col)
-    }
-
-    // ==== Keymap handling methods ====
-
-    /// Handle keymap input for any mode
+    // Keymap input handling for tests
     pub fn handle_keymap_input(&mut self, key: &crate::input::Key) -> std::io::Result<()> {
-        // We need to extract the keymap processor temporarily to avoid borrowing issues
+        // Extract keymap processor temporarily to avoid borrowing issues
         let mut keymap_processor = std::mem::take(&mut self.keymap_processor);
-        let handled = keymap_processor.process_key(self, key);
+        let result = keymap_processor.process_key(self, key);
         self.keymap_processor = keymap_processor;
 
-        // If key was not handled, provide feedback
-        if let Ok(false) = handled {
-            // Only beep for audio feedback on invalid key
-            let _ = self.bell();
-        }
-
-        Ok(())
-    }
-
-    /// Clamp cursor to valid buffer bounds
-    /// This ensures cursor position is valid after operations that may change line count
-    pub fn clamp_cursor_to_buffer(&mut self) {
-        let current_buffer = &mut self.buffers[self.current_buffer];
-        let line_count = current_buffer.buffer.line_count();
-
-        // Ensure cursor row is within bounds
-        if current_buffer.cursor.row >= line_count {
-            current_buffer.cursor.row = if line_count > 0 { line_count - 1 } else { 0 };
-        }
-
-        // Ensure cursor column is within bounds for current row
-        if current_buffer.cursor.row < line_count {
-            let line_len = current_buffer.buffer.line_length(current_buffer.cursor.row);
-            if current_buffer.cursor.col > line_len {
-                current_buffer.cursor.col = line_len;
-            }
-        } else {
-            current_buffer.cursor.col = 0;
-        }
-    }
-}
-
-/// Tracks changes made during a single insert mode session
-#[derive(Debug, Clone)]
-pub struct InsertModeGroup {
-    /// The starting position where insert mode began
-    pub start_pos: crate::buffer::Position,
-    /// The accumulated text that was inserted
-    pub inserted_text: String,
-    /// The text that was deleted during this insert session (for backspace on existing content)
-    pub deleted_text: String,
-    /// The position where deletions started (for backspace on existing content)
-    pub deletion_start_pos: Option<crate::buffer::Position>,
-}
-
-impl InsertModeGroup {
-    pub fn new(start_pos: crate::buffer::Position) -> Self {
-        Self {
-            start_pos,
-            inserted_text: String::new(),
-            deleted_text: String::new(),
-            deletion_start_pos: None,
-        }
-    }
-
-    pub fn add_char(&mut self, ch: char) {
-        self.inserted_text.push(ch);
-    }
-
-    pub fn add_newline(&mut self) {
-        self.inserted_text.push('\n');
-    }
-
-    pub fn remove_char(&mut self) {
-        self.inserted_text.pop();
-    }
-
-    /// Record a character that was deleted from existing buffer content (not just undoing recent insertions)
-    pub fn add_deleted_char(&mut self, ch: char, pos: crate::buffer::Position) {
-        if self.deletion_start_pos.is_none() {
-            // For backspace operations, the restoration position should be the leftmost deleted position
-            self.deletion_start_pos = Some(pos);
-        } else {
-            // Update deletion_start_pos to the leftmost position
-            if let Some(current_pos) = self.deletion_start_pos {
-                if pos.row < current_pos.row
-                    || (pos.row == current_pos.row && pos.col < current_pos.col)
-                {
-                    self.deletion_start_pos = Some(pos);
-                }
+        match result {
+            Ok(_handled) => Ok(()),
+            Err(e) => {
+                self.set_status_message(format!("Error: {e}"));
+                Ok(())
             }
         }
-        self.deleted_text.insert(0, ch); // Insert at beginning to maintain order
     }
 
-    /// Check if this insert session has any changes (insertions or deletions)
-    pub fn has_changes(&self) -> bool {
-        !self.inserted_text.is_empty() || !self.deleted_text.is_empty()
-    }
+    // Visual mode handling
 }
 
 impl Editor {

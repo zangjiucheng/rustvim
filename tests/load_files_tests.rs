@@ -32,10 +32,7 @@ fn test_load_multiple_files() {
 
     // Current buffer should be the first one (file1)
     assert_eq!(editor.current_buffer, 0);
-    assert_eq!(
-        *editor.filename(),
-        Some(file1.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file1.to_str().unwrap()));
     assert_eq!(editor.buffer().line_count(), 1);
     assert_eq!(editor.buffer().get_line(0).unwrap(), "Content of file 1");
     assert!(editor.buffer().ends_with_newline);
@@ -57,10 +54,7 @@ fn test_load_single_file_with_load_files() {
     assert!(results[0].is_ok());
     assert_eq!(editor.buffers.len(), 1);
     assert_eq!(editor.current_buffer, 0);
-    assert_eq!(
-        *editor.filename(),
-        Some(test_file.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(test_file.to_str().unwrap()));
     assert_eq!(editor.buffer().get_line(0).unwrap(), "Single file content");
     assert!(!editor.buffer().ends_with_newline);
 
@@ -91,10 +85,7 @@ fn test_load_files_with_nonexistent_file() {
 
     // Current buffer should be the first one (existing file)
     assert_eq!(editor.current_buffer, 0);
-    assert_eq!(
-        *editor.filename(),
-        Some(existing_file.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(existing_file.to_str().unwrap()));
     assert_eq!(editor.buffer().get_line(0).unwrap(), "I exist!");
 
     // Cleanup: temp_dir automatically cleans up when dropped

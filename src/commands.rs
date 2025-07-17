@@ -517,18 +517,15 @@ impl Command for ExCommand {
                 }
                 Ok(())
             }
-            ExCommand::Set { option, value: _ } => {
-                match option.as_str() {
-                    "numbers" | "number" => {
-                        editor.show_line_numbers = true;
-                        editor.set_status_message("Line numbers enabled".to_string());
+            ExCommand::Set { option, value } => {
+                match editor.config.set_option(option, value.as_deref()) {
+                    Ok(message) => {
+                        // Update the deprecated show_line_numbers field for compatibility
+                        editor.show_line_numbers = editor.config.show_line_numbers;
+                        editor.set_status_message(message);
                     }
-                    "nonumbers" | "nonumber" | "nu!" => {
-                        editor.show_line_numbers = false;
-                        editor.set_status_message("Line numbers disabled".to_string());
-                    }
-                    _ => {
-                        editor.set_status_message(format!("E518: Unknown option: {option}"));
+                    Err(error) => {
+                        editor.set_status_message(error);
                     }
                 }
                 Ok(())

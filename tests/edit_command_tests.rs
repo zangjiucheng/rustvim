@@ -25,55 +25,37 @@ fn test_edit_command_creates_multiple_buffers() {
     editor.execute_ex_command(&format!("e {}", file1.to_str().unwrap()));
     assert_eq!(editor.buffers.len(), 2);
     assert_eq!(editor.current_buffer, 1);
-    assert_eq!(
-        *editor.filename(),
-        Some(file1.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file1.to_str().unwrap()));
     assert_eq!(editor.buffer().get_line(0).unwrap(), "Content of file 1");
 
     // Edit second file
     editor.execute_ex_command(&format!("e {}", file2.to_str().unwrap()));
     assert_eq!(editor.buffers.len(), 3);
     assert_eq!(editor.current_buffer, 2);
-    assert_eq!(
-        *editor.filename(),
-        Some(file2.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file2.to_str().unwrap()));
     assert_eq!(editor.buffer().get_line(0).unwrap(), "Content of file 2");
 
     // Edit a new file (doesn't exist)
     editor.execute_ex_command(&format!("e {}", file3.to_str().unwrap()));
     assert_eq!(editor.buffers.len(), 4);
     assert_eq!(editor.current_buffer, 3);
-    assert_eq!(
-        *editor.filename(),
-        Some(file3.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file3.to_str().unwrap()));
     assert_eq!(editor.buffer().get_line(0).unwrap(), ""); // Empty buffer
     assert!(editor.status_msg.as_ref().unwrap().contains("[New File]"));
 
     // Test buffer navigation
     editor.execute_ex_command("bp"); // Previous buffer
     assert_eq!(editor.current_buffer, 2);
-    assert_eq!(
-        *editor.filename(),
-        Some(file2.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file2.to_str().unwrap()));
 
     editor.execute_ex_command("bn"); // Next buffer
     assert_eq!(editor.current_buffer, 3);
-    assert_eq!(
-        *editor.filename(),
-        Some(file3.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file3.to_str().unwrap()));
 
     // Test switching to buffer by number
     editor.execute_ex_command("2"); // Switch to buffer 2 (file1)
     assert_eq!(editor.current_buffer, 1); // 0-indexed, so buffer 2 is index 1
-    assert_eq!(
-        *editor.filename(),
-        Some(file1.to_str().unwrap().to_string())
-    );
+    assert_eq!(editor.filename(), Some(file1.to_str().unwrap()));
 
     // Cleanup: temp_dir automatically cleans up when dropped
     drop(temp_dir);

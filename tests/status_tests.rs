@@ -15,7 +15,7 @@ mod status_tests {
         assert_eq!(editor.current_buffer, 0);
 
         // Check that filename returns None for new buffer
-        assert_eq!(*editor.filename(), None);
+        assert_eq!(editor.filename(), None);
         assert!(!editor.is_modified());
 
         // Verify buffer count and current index
@@ -41,7 +41,7 @@ mod status_tests {
         // Should now have 2 buffers, current should be 1 (second buffer)
         assert_eq!(editor.buffers.len(), 2);
         assert_eq!(editor.current_buffer, 1);
-        assert_eq!(*editor.filename(), Some("file1.txt".to_string()));
+        assert_eq!(editor.filename(), Some("file1.txt"));
 
         // Add a third buffer
         let buffer_info2 = BufferInfo {
@@ -57,7 +57,7 @@ mod status_tests {
         // Should now have 3 buffers, current should be 2 (third buffer)
         assert_eq!(editor.buffers.len(), 3);
         assert_eq!(editor.current_buffer, 2);
-        assert_eq!(*editor.filename(), Some("file2.txt".to_string()));
+        assert_eq!(editor.filename(), Some("file2.txt"));
         assert!(editor.is_modified());
     }
 
@@ -142,10 +142,7 @@ mod status_tests {
         let content = fs::read_to_string(&test_file).expect("Failed to read test file");
         *editor.buffer_mut() = Buffer::from_file(&content);
 
-        assert_eq!(
-            *editor.filename(),
-            Some(test_file.to_str().unwrap().to_string())
-        );
+        assert_eq!(editor.filename(), Some(test_file.to_str().unwrap()));
         assert_eq!(editor.buffer().line_count(), 2);
 
         // Cleanup: temp_dir automatically cleans up when dropped
@@ -289,7 +286,7 @@ mod status_tests {
         // Check second buffer (current, modified)
         assert!(buffer_list[1].contains("2"));
         assert!(buffer_list[1].contains("%")); // Current buffer marker
-        assert!(buffer_list[1].contains("+")); // Modified marker
+        assert!(buffer_list[1].contains("*")); // Modified marker
         assert!(buffer_list[1].contains("test.txt"));
     }
 }

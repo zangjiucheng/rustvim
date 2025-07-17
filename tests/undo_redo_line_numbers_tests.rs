@@ -76,7 +76,7 @@ fn test_coordinate_conversion_with_line_numbers() {
     assert!(gutter_width > 0); // Should have gutter for line numbers
 
     // Test screen to buffer conversion
-    let screen_col = 10;
+    let screen_col: usize = 10;
     println!("Gutter width: {gutter_width}");
     if let Some((_, buffer_col)) = editor.screen_to_buffer_coords(0, screen_col) {
         println!(
