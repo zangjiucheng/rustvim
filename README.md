@@ -1,3 +1,4 @@
+<!-- Language: [English](README.md) | [中文](README_zh.md) -->
 # RustVim - A Vim-like Text Editor in Rust
 
 A comprehensive vim-like text editor implemented in Rust, featuring multiple editing modes, visual selection (including block mode), file operations, search functionality, and a robust undo/redo system.
