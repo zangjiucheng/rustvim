@@ -46,7 +46,7 @@ A comprehensive vim-like text editor implemented in Rust, featuring multiple edi
 ## Installation
 
 ### Prerequisites
-- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
+- Rust 1.85+ (install from [rustup.rs](https://rustup.rs/))
 
 ### Build from Source
 ```bash
@@ -389,3 +389,45 @@ The project includes comprehensive GitHub Actions workflows for automated qualit
 - **Push to main/develop**: Full build and coverage analysis
 - **Pull Requests**: Quality checks and coverage reporting
 - **Version Tags**: Automated release creation with cross-platform binaries
+
+## Development Setup
+
+### Prerequisites
+- Rust 1.85+ (install from [rustup.rs](https://rustup.rs/))
+- Git for version control
+
+### Setting Up Pre-commit Hooks
+
+To ensure code quality and consistency, we provide pre-commit hooks that automatically check formatting and run lints:
+
+```bash
+# Quick setup - installs Git pre-commit hook
+./scripts/install-pre-commit-hook.sh
+
+# Alternative: Use pre-commit framework
+pip install pre-commit
+pre-commit install
+```
+
+The hooks will automatically run before each commit and check:
+- **Code formatting** (`cargo fmt`)
+- **Clippy lints** (`cargo clippy`)
+- **File formatting** (YAML, TOML syntax, trailing whitespace, etc.)
+
+See [scripts/README.md](scripts/README.md) for detailed setup instructions.
+
+### Quality Checks
+
+```bash
+# Format code
+cargo fmt --all
+
+# Run lints
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Run tests
+cargo test --all-features
+
+# Generate coverage report
+./coverage.sh
+```

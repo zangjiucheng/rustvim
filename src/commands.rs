@@ -439,6 +439,11 @@ pub enum ExCommand {
     BufferNumber {
         number: usize,
     },
+    /// Set commands for configuration
+    Set {
+        option: String,
+        value: Option<String>,
+    },
     /// Unknown command
     Unknown {
         command: String,
@@ -512,6 +517,22 @@ impl Command for ExCommand {
                 }
                 Ok(())
             }
+            ExCommand::Set { option, value: _ } => {
+                match option.as_str() {
+                    "numbers" | "number" => {
+                        editor.show_line_numbers = true;
+                        editor.set_status_message("Line numbers enabled".to_string());
+                    }
+                    "nonumbers" | "nonumber" | "nu!" => {
+                        editor.show_line_numbers = false;
+                        editor.set_status_message("Line numbers disabled".to_string());
+                    }
+                    _ => {
+                        editor.set_status_message(format!("E518: Unknown option: {option}"));
+                    }
+                }
+                Ok(())
+            }
             ExCommand::Unknown { command } => {
                 editor.set_status_message(format!("E492: Not an editor command: {command}"));
                 Ok(())
@@ -570,6 +591,24 @@ impl ExCommandParser {
             "bn" | "bnext" => ExCommand::BufferNext,
             "bp" | "bprev" => ExCommand::BufferPrev,
             "ls" | "buffers" => ExCommand::BufferList,
+            "set" => {
+                if parts.len() > 1 {
+                    let option = parts[1];
+                    let value = if parts.len() > 2 {
+                        Some(parts[2..].join(" "))
+                    } else {
+                        None
+                    };
+                    ExCommand::Set {
+                        option: option.to_string(),
+                        value,
+                    }
+                } else {
+                    ExCommand::Unknown {
+                        command: "E471: Argument required".to_string(),
+                    }
+                }
+            }
             "b" => {
                 if parts.len() > 1 {
                     if let Ok(buffer_num) = parts[1].parse::<usize>() {

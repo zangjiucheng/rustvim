@@ -2,7 +2,8 @@ use crate::buffer::Buffer;
 use crate::commands::Command;
 use crate::history::History;
 use crate::keymap::KeymapProcessor;
-use crate::terminal::Terminal;
+use crate::terminal::{CursorShape, Terminal};
+use std::time::Instant;
 
 /// Represents the current mode of the editor
 #[derive(Debug, Clone, PartialEq)]
@@ -110,6 +111,12 @@ pub struct Editor {
     /// Visual mode type: character-based (v), line-based (V), or block-based (Ctrl+V)
     pub visual_line_mode: bool,
     pub visual_block_mode: bool,
+
+    /// Status message timer
+    pub status_msg_time: Option<Instant>,
+
+    /// Configuration flags
+    pub show_line_numbers: bool,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -191,6 +198,8 @@ impl Editor {
             visual_start: None,
             visual_line_mode: false,
             visual_block_mode: false,
+            status_msg_time: None,
+            show_line_numbers: false,
         }
     }
 
@@ -207,8 +216,17 @@ impl Editor {
 
         // Main event loop
         while self.running {
-            // Read key input
+            // Read key input (with timeout support)
             let key = input_handler.read_key()?;
+
+            // Handle timeout events to check for status message expiration
+            if key == crate::input::Key::Timeout {
+                // Only refresh screen if status message was actually cleared
+                if self.check_status_timeout() {
+                    self.refresh_screen()?;
+                }
+                continue;
+            }
 
             // Clear status message on any key press (except in search/command mode)
             if self.mode != Mode::Search && self.mode != Mode::Command {
@@ -277,10 +295,14 @@ impl Editor {
         // Draw status line
         self.draw_status_line()?;
 
-        // Position cursor at editor cursor position
+        // Position cursor at editor cursor position (accounting for line number gutter)
         let screen_row = self.cursor().row.saturating_sub(self.scroll_offset()) + 1;
-        let screen_col = self.cursor().col + 1;
+        let gutter_width = self.line_number_gutter_width();
+        let screen_col = self.cursor().col + 1 + gutter_width;
         self.terminal.move_cursor(screen_row, screen_col)?;
+
+        // Update cursor shape based on mode
+        self.update_cursor_shape()?;
 
         // Show cursor
         self.terminal.show_cursor()?;
@@ -293,11 +315,28 @@ impl Editor {
         let rows = self.terminal.rows();
         let cols = self.terminal.cols();
 
+        // Calculate line number gutter width if enabled
+        let line_num_width = self.line_number_gutter_width();
+
         // Reserve last row for status line
         let content_rows = rows.saturating_sub(1);
 
         for screen_row in 0..content_rows {
             let buffer_row = screen_row + self.scroll_offset();
+
+            // Draw line number if enabled
+            if self.show_line_numbers {
+                if buffer_row < self.buffer().line_count() {
+                    let line_num =
+                        format!("{:>width$} ", buffer_row + 1, width = line_num_width - 1);
+                    self.terminal.write(&line_num)?;
+                } else {
+                    let empty_gutter = " ".repeat(line_num_width);
+                    self.terminal.write(&empty_gutter)?;
+                }
+            }
+
+            let available_cols = cols.saturating_sub(line_num_width);
 
             if buffer_row < self.buffer().line_count() {
                 // Draw actual buffer line
@@ -326,10 +365,14 @@ impl Editor {
                                 self.terminal.write(after)?;
                             }
                         } else {
-                            self.draw_line_with_visual_highlight(&line, buffer_row, cols)?;
+                            self.draw_line_with_visual_highlight(
+                                &line,
+                                buffer_row,
+                                available_cols,
+                            )?;
                         }
                     } else {
-                        self.draw_line_with_visual_highlight(&line, buffer_row, cols)?;
+                        self.draw_line_with_visual_highlight(&line, buffer_row, available_cols)?;
                     }
                 }
             } else {
@@ -616,13 +659,16 @@ impl Editor {
             // Enhanced status message with undo count
             let remaining = current_buffer.history.undo_count();
             if remaining > 0 {
-                self.status_msg = Some(format!("Undone ({remaining} more available)"));
+                self.set_status_message(format!("Undone ({remaining} more available)"));
             } else {
-                self.status_msg = Some("Undone (oldest change)".to_string());
+                self.set_status_message("Undone (oldest change)".to_string());
             }
         } else {
-            self.status_msg = Some("Already at oldest change".to_string());
+            self.set_status_message("Already at oldest change".to_string());
         }
+
+        // Ensure cursor is within bounds after undo (line count may have changed)
+        self.clamp_cursor_to_buffer();
         self.update_scroll();
     }
 
@@ -640,13 +686,16 @@ impl Editor {
             // Enhanced status message with redo count
             let remaining = current_buffer.history.redo_count();
             if remaining > 0 {
-                self.status_msg = Some(format!("Redone ({remaining} more available)"));
+                self.set_status_message(format!("Redone ({remaining} more available)"));
             } else {
-                self.status_msg = Some("Redone (newest change)".to_string());
+                self.set_status_message("Redone (newest change)".to_string());
             }
         } else {
-            self.status_msg = Some("Already at newest change".to_string());
+            self.set_status_message("Already at newest change".to_string());
         }
+
+        // Ensure cursor is within bounds after redo (line count may have changed)
+        self.clamp_cursor_to_buffer();
         self.update_scroll();
     }
 
@@ -946,11 +995,44 @@ impl Editor {
     /// Set a temporary status message
     pub fn set_status_message(&mut self, message: String) {
         self.status_msg = Some(message);
+        self.status_msg_time = Some(Instant::now());
     }
 
     /// Clear the status message
     pub fn clear_status_message(&mut self) {
         self.status_msg = None;
+        self.status_msg_time = None;
+    }
+
+    /// Check if status message has timed out and clear it
+    /// Returns true if the status message was cleared, false if no change
+    pub fn check_status_timeout(&mut self) -> bool {
+        if let Some(msg_time) = self.status_msg_time {
+            if msg_time.elapsed().as_secs() >= 2 {
+                self.clear_status_message();
+                return true; // Status message was cleared
+            }
+        }
+        false // No change
+    }
+
+    /// Send bell for invalid operations
+    pub fn bell(&self) -> std::io::Result<()> {
+        self.terminal.bell()
+    }
+
+    /// Flash screen for errors (non-blocking)
+    pub fn flash(&self) -> std::io::Result<()> {
+        self.terminal.flash_screen_immediate()
+    }
+
+    /// Update cursor shape based on current mode
+    pub fn update_cursor_shape(&self) -> std::io::Result<()> {
+        let shape = match self.mode {
+            Mode::Insert => CursorShape::Bar,
+            Mode::Normal | Mode::Visual | Mode::Command | Mode::Search => CursorShape::Block,
+        };
+        self.terminal.set_cursor_shape(shape)
     }
 
     /// Start command mode with : command
@@ -1133,15 +1215,83 @@ impl Editor {
             .collect()
     }
 
+    /// Calculate the width of the line number gutter
+    pub fn line_number_gutter_width(&self) -> usize {
+        if self.show_line_numbers {
+            let max_line_num = self.buffer().line_count();
+            format!("{max_line_num}").len() + 1 // +1 for space
+        } else {
+            0
+        }
+    }
+
+    /// Convert screen coordinates to buffer coordinates (accounting for line number gutter)
+    /// Returns None if the coordinates are in the line number gutter
+    pub fn screen_to_buffer_coords(
+        &self,
+        screen_row: usize,
+        screen_col: usize,
+    ) -> Option<(usize, usize)> {
+        let gutter_width = self.line_number_gutter_width();
+
+        // Check if click is in the line number gutter
+        if screen_col <= gutter_width {
+            return None; // Click is in the gutter area
+        }
+
+        // Convert to buffer coordinates
+        let buffer_row = screen_row.saturating_sub(1) + self.scroll_offset();
+        let buffer_col = screen_col.saturating_sub(1 + gutter_width);
+
+        Some((buffer_row, buffer_col))
+    }
+
+    /// Convert buffer coordinates to screen coordinates (accounting for line number gutter)
+    pub fn buffer_to_screen_coords(&self, buffer_row: usize, buffer_col: usize) -> (usize, usize) {
+        let gutter_width = self.line_number_gutter_width();
+        let screen_row = buffer_row.saturating_sub(self.scroll_offset()) + 1;
+        let screen_col = buffer_col + 1 + gutter_width;
+        (screen_row, screen_col)
+    }
+
     // ==== Keymap handling methods ====
 
     /// Handle keymap input for any mode
     pub fn handle_keymap_input(&mut self, key: &crate::input::Key) -> std::io::Result<()> {
         // We need to extract the keymap processor temporarily to avoid borrowing issues
         let mut keymap_processor = std::mem::take(&mut self.keymap_processor);
-        let _ = keymap_processor.process_key(self, key);
+        let handled = keymap_processor.process_key(self, key);
         self.keymap_processor = keymap_processor;
+
+        // If key was not handled, provide feedback
+        if let Ok(false) = handled {
+            // Only beep for audio feedback on invalid key
+            let _ = self.bell();
+        }
+
         Ok(())
+    }
+
+    /// Clamp cursor to valid buffer bounds
+    /// This ensures cursor position is valid after operations that may change line count
+    pub fn clamp_cursor_to_buffer(&mut self) {
+        let current_buffer = &mut self.buffers[self.current_buffer];
+        let line_count = current_buffer.buffer.line_count();
+
+        // Ensure cursor row is within bounds
+        if current_buffer.cursor.row >= line_count {
+            current_buffer.cursor.row = if line_count > 0 { line_count - 1 } else { 0 };
+        }
+
+        // Ensure cursor column is within bounds for current row
+        if current_buffer.cursor.row < line_count {
+            let line_len = current_buffer.buffer.line_length(current_buffer.cursor.row);
+            if current_buffer.cursor.col > line_len {
+                current_buffer.cursor.col = line_len;
+            }
+        } else {
+            current_buffer.cursor.col = 0;
+        }
     }
 }
 

@@ -1,0 +1,63 @@
+# Pre-commit configuration for RustVim
+# Install pre-commit: pip install pre-commit
+# Install hooks: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Rust formatting and linting
+  - repo: local
+    hooks:
+      # Check Rust formatting
+      - id: cargo-fmt
+        name: Cargo Format Check
+        entry: cargo
+        args: ["fmt", "--all", "--", "--check"]
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        
+      # Run Clippy lints
+      - id: cargo-clippy
+        name: Cargo Clippy
+        entry: cargo
+        args: ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        
+      # Run tests (optional - can be slow)
+      - id: cargo-test
+        name: Cargo Test
+        entry: cargo
+        args: ["test", "--all-features"]
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        # Uncomment the line below to disable tests in pre-commit (faster commits)
+        # stages: [manual]
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      # Check for files that would conflict in case-insensitive filesystems
+      - id: check-case-conflict
+      
+      # Check for merge conflict markers
+      - id: check-merge-conflict
+      
+      # Check YAML syntax
+      - id: check-yaml
+        
+      # Check TOML syntax (for Cargo.toml)
+      - id: check-toml
+        
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        
+      # Check for large files (>500KB)
+      - id: check-added-large-files
+        args: ['--maxkb=500']

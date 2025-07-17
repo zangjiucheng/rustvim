@@ -33,6 +33,9 @@ pub enum Key {
 
     /// Unknown/unsupported key sequence
     Unknown,
+
+    /// Timeout occurred (no key pressed within timeout period)
+    Timeout,
 }
 
 /// Input handler for reading and parsing keystrokes
@@ -52,19 +55,17 @@ impl InputHandler {
     pub fn read_key(&mut self) -> io::Result<Key> {
         let mut buffer = [0; 1];
 
-        // Read exactly one byte (this will block until available)
-        loop {
-            match self.stdin.read(&mut buffer) {
-                Ok(0) => {
-                    // EOF or no data - keep trying
-                    continue;
-                }
-                Ok(_) => {
-                    break;
-                }
-                Err(e) => {
-                    return Err(e);
-                }
+        // Read exactly one byte (with timeout support)
+        match self.stdin.read(&mut buffer) {
+            Ok(0) => {
+                // No data available within timeout - return a timeout key
+                return Ok(Key::Timeout);
+            }
+            Ok(_) => {
+                // Got data, continue processing
+            }
+            Err(e) => {
+                return Err(e);
             }
         }
 

@@ -266,19 +266,16 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
 
     // Create 3 buffers with different content
     for i in 0..3 {
-        let content = format!(
-            "buffer {} line 1\nbuffer {} line 2\nbuffer {} line 3",
-            i, i, i
-        );
+        let content = format!("buffer {i} line 1\nbuffer {i} line 2\nbuffer {i} line 3");
 
         if i == 0 {
             let buffer = Buffer::from_file(&content);
             editor.buffers[0].buffer = buffer;
-            editor.buffers[0].filename = Some(format!("buffer{}.txt", i));
+            editor.buffers[0].filename = Some(format!("buffer{i}.txt"));
         } else {
             let buffer_info = BufferInfo {
                 buffer: Buffer::from_file(&content),
-                filename: Some(format!("buffer{}.txt", i)),
+                filename: Some(format!("buffer{i}.txt")),
                 modified: false,
                 cursor: Cursor::new(),
                 scroll_offset: 0,
@@ -301,11 +298,11 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
         assert_eq!(editor.buffer().line_count(), 2);
         assert_eq!(
             editor.buffer().get_line(0).unwrap(),
-            format!("buffer {} line 1", buffer_idx)
+            format!("buffer {buffer_idx} line 1")
         );
         assert_eq!(
             editor.buffer().get_line(1).unwrap(),
-            format!("buffer {} line 3", buffer_idx)
+            format!("buffer {buffer_idx} line 3")
         );
     }
 
@@ -321,7 +318,7 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
         assert_eq!(editor.buffer().line_count(), 3);
         assert_eq!(
             editor.buffer().get_line(1).unwrap(),
-            format!("buffer {} line 2", buffer_idx)
+            format!("buffer {buffer_idx} line 2")
         );
     }
 
@@ -337,11 +334,11 @@ fn test_visual_mode_delete_redo_with_buffer_switching_stress() {
         assert_eq!(editor.buffer().line_count(), 2);
         assert_eq!(
             editor.buffer().get_line(0).unwrap(),
-            format!("buffer {} line 1", buffer_idx)
+            format!("buffer {buffer_idx} line 1")
         );
         assert_eq!(
             editor.buffer().get_line(1).unwrap(),
-            format!("buffer {} line 3", buffer_idx)
+            format!("buffer {buffer_idx} line 3")
         );
     }
 
