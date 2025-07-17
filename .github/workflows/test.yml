@@ -58,22 +58,19 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         # Run audit and capture output
-        if cargo audit --format json > audit_results.json 2>&1; then
+        if cargo audit > audit_results.txt 2>&1; then
           echo "✅ **No security vulnerabilities found**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All dependencies are secure and up to date." >> $GITHUB_STEP_SUMMARY
         else
-          # Parse JSON output for better formatting
+          # Security issues found
           echo "⚠️ **Security audit completed with findings**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Try to get human-readable output
-          cargo audit --format human >> audit_human.txt 2>&1 || true
-          
-          if [ -f audit_human.txt ]; then
+          if [ -f audit_results.txt ]; then
             echo "### Findings:" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            head -50 audit_human.txt >> $GITHUB_STEP_SUMMARY
+            head -50 audit_results.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
           
