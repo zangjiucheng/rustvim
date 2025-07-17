@@ -131,6 +131,77 @@ impl Terminal {
     pub fn cols(&self) -> usize {
         self.size.1
     }
+
+    /// Send terminal bell (audio/visual feedback) - non-blocking
+    pub fn bell(&self) -> io::Result<()> {
+        // Non-blocking bell - just send the bell character
+        // Let the terminal handle the audio/visual feedback
+
+        // 1. ASCII BEL character (traditional terminal bell)
+        print!("\x07");
+        io::stdout().flush()?;
+
+        // 2. On macOS, try system beep in background (non-blocking)
+        #[cfg(target_os = "macos")]
+        {
+            // Spawn background process for system beep (non-blocking)
+            use std::process::Command;
+            let _ = Command::new("afplay")
+                .arg("/System/Library/Sounds/Ping.aiff")
+                .spawn(); // Use spawn() instead of output() to avoid blocking
+        }
+
+        Ok(())
+    }
+
+    /// Brief visual flash for bell feedback (non-blocking version)
+    pub fn flash_screen_brief(&self) -> io::Result<()> {
+        // Non-blocking visual bell - just flash without delay
+        // The terminal will handle the visual feedback timing
+        print!("\x1b[?5h\x1b[?5l");
+        io::stdout().flush()
+    }
+
+    /// Flash screen by briefly inverting colors (with minimal delay)
+    pub fn flash_screen(&self) -> io::Result<()> {
+        // Invert the entire screen
+        print!("\x1b[?5h");
+        io::stdout().flush()?;
+
+        // Reduced delay to minimize input blocking (was 100ms, now 25ms)
+        std::thread::sleep(std::time::Duration::from_millis(25));
+
+        // Restore normal screen
+        print!("\x1b[?5l");
+        io::stdout().flush()
+    }
+
+    /// Flash screen without blocking (immediate restore)
+    pub fn flash_screen_immediate(&self) -> io::Result<()> {
+        // Non-blocking flash - invert and immediately restore
+        // Terminal may still show a brief flash due to display timing
+        print!("\x1b[?5h\x1b[?5l");
+        io::stdout().flush()
+    }
+
+    /// Change cursor shape for different modes
+    pub fn set_cursor_shape(&self, shape: CursorShape) -> io::Result<()> {
+        let code = match shape {
+            CursorShape::Block => "\x1b[2 q",     // Block cursor
+            CursorShape::UnderLine => "\x1b[4 q", // Underline cursor
+            CursorShape::Bar => "\x1b[6 q",       // Bar/line cursor
+        };
+        print!("{code}");
+        io::stdout().flush()
+    }
+}
+
+/// Different cursor shapes for visual feedback
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CursorShape {
+    Block,     // Normal mode - block cursor
+    UnderLine, // Replace mode - underline cursor
+    Bar,       // Insert mode - bar/line cursor
 }
 
 impl Default for Terminal {
