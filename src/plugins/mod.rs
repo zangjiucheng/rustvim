@@ -5,6 +5,7 @@
 
 use crate::plugin::PluginRegistry;
 
+pub mod examples;
 pub mod text_analysis;
 pub mod text_manipulation;
 pub mod utils;
@@ -14,4 +15,6 @@ pub fn register_all_plugins(registry: &mut PluginRegistry) {
     text_analysis::register_plugins(registry);
     text_manipulation::register_plugins(registry);
     utils::register_plugins(registry);
+    // examples::register_example_plugins(registry);
+    // examples::register_meta_commands(registry);
 }

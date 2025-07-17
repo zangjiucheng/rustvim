@@ -6,7 +6,7 @@ use crate::terminal::{CursorShape, Terminal};
 use std::time::Instant;
 
 /// Represents the current mode of the editor
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
     Normal,
     Insert,
@@ -306,11 +306,29 @@ impl Editor {
 
             match result {
                 Ok(true) => {
-                    // Key was handled successfully
+                    // Key was handled successfully by keymap
                 }
                 Ok(false) => {
-                    // Key was not recognized - ring bell for invalid input
-                    let _ = self.bell();
+                    // Key was not recognized by keymap - try plugin registry
+                    let current_mode = self.mode;
+                    let temp_plugin_registry = std::mem::take(&mut self.plugin_registry);
+                    let plugin_result =
+                        temp_plugin_registry.handle_key_command(current_mode, &key, self);
+                    self.plugin_registry = temp_plugin_registry;
+
+                    match plugin_result {
+                        Ok(true) => {
+                            // Plugin handled the key successfully
+                        }
+                        Ok(false) => {
+                            // Neither keymap nor plugins handled the key - ring bell
+                            let _ = self.bell();
+                        }
+                        Err(err) => {
+                            // Plugin error - show error message
+                            self.set_status_message(format!("Plugin error: {err}"));
+                        }
+                    }
                 }
                 Err(err) => {
                     // Error processing key - show error message
