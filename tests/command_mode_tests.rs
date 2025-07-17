@@ -172,10 +172,7 @@ mod command_mode_tests {
         editor.execute_ex_command(&format!("w {}", new_file.to_str().unwrap()));
 
         // Should have set the filename
-        assert_eq!(
-            *editor.filename(),
-            Some(new_file.to_str().unwrap().to_string())
-        );
+        assert_eq!(editor.filename(), Some(new_file.to_str().unwrap()));
         assert!(!editor.is_modified()); // Should be marked as not modified after save
 
         // Verify file was created and has correct content

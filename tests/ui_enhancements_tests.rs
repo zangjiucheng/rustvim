@@ -392,6 +392,9 @@ fn test_multiple_status_message_timeouts() {
 /// Test enhanced status messages for file operations
 #[test]
 fn test_enhanced_file_operation_messages() {
+    use std::env;
+    use std::fs;
+
     let mut editor = Editor::new();
 
     // Add some content to the buffer
@@ -401,18 +404,25 @@ fn test_enhanced_file_operation_messages() {
     editor.buffer_mut().insert_char(pos, 'i');
     editor.set_modified(true);
 
-    // Set a filename
-    editor.set_filename(Some("test.txt".to_string()));
+    // Use a temporary file in the system temp directory
+    let tmp_dir = env::temp_dir();
+    let tmp_file_path = tmp_dir.join("rustvim_test_enhanced_file_operation_messages.txt");
+    let tmp_file_str = tmp_file_path.to_str().unwrap().to_string();
 
-    // Test write operation (this will fail but should set appropriate message)
+    // Set a filename
+    editor.set_filename(Some(tmp_file_str.clone()));
+
+    // Test write operation
     let success = editor.write_file(None);
 
-    // The write might fail due to permissions or other issues, but status message should be set
+    // The write might fail but status message should be set
     assert!(editor.status_msg.is_some());
 
     if success {
         // If write succeeded, should have success message
         assert!(editor.status_msg.as_ref().unwrap().contains("written"));
+        // Clean up the tmp file
+        let _ = fs::remove_file(&tmp_file_path);
     } else {
         // If write failed, should have error message
         assert!(editor.status_msg.as_ref().unwrap().starts_with("E212:"));

@@ -23,9 +23,6 @@ pub enum NormalCommand {
 
     /// Mode switch commands
     ModeSwitch(ModeSwitchCommand),
-
-    /// File operations
-    File(FileCommand),
 }
 
 impl Command for NormalCommand {
@@ -38,7 +35,6 @@ impl Command for NormalCommand {
             }
             NormalCommand::Edit(edit) => edit.execute(editor),
             NormalCommand::ModeSwitch(mode_switch) => mode_switch.execute(editor),
-            NormalCommand::File(file) => file.execute(editor),
         }
     }
 }
@@ -384,23 +380,6 @@ impl Command for ModeSwitchCommand {
     }
 }
 
-/// File operation commands
-#[derive(Debug, Clone)]
-pub enum FileCommand {
-    Save,         // :w
-    Quit,         // :q
-    SaveQuit,     // :wq
-    ForceQuit,    // :q!
-    Open(String), // :e filename
-}
-
-impl Command for FileCommand {
-    fn execute(&self, editor: &mut Editor) -> Result<(), String> {
-        // TODO: Implement file operations
-        Ok(())
-    }
-}
-
 /// Ex commands (colon commands) for editor operations
 #[derive(Debug, Clone)]
 pub enum ExCommand {
@@ -444,6 +423,8 @@ pub enum ExCommand {
         option: String,
         value: Option<String>,
     },
+    /// Save current configuration to default location
+    SaveConfig,
     /// Unknown command
     Unknown {
         command: String,
@@ -517,18 +498,27 @@ impl Command for ExCommand {
                 }
                 Ok(())
             }
-            ExCommand::Set { option, value: _ } => {
-                match option.as_str() {
-                    "numbers" | "number" => {
-                        editor.show_line_numbers = true;
-                        editor.set_status_message("Line numbers enabled".to_string());
+            ExCommand::Set { option, value } => {
+                match editor.config.set_option(option, value.as_deref()) {
+                    Ok(message) => {
+                        // Update the deprecated show_line_numbers field for compatibility
+                        editor.show_line_numbers = editor.config.show_line_numbers;
+                        editor.set_status_message(message);
                     }
-                    "nonumbers" | "nonumber" | "nu!" => {
-                        editor.show_line_numbers = false;
-                        editor.set_status_message("Line numbers disabled".to_string());
+                    Err(error) => {
+                        editor.set_status_message(error);
                     }
-                    _ => {
-                        editor.set_status_message(format!("E518: Unknown option: {option}"));
+                }
+                Ok(())
+            }
+            ExCommand::SaveConfig => {
+                match editor.save_config() {
+                    Ok(()) => {
+                        editor
+                            .set_status_message("Configuration saved to ~/.rustvimrc".to_string());
+                    }
+                    Err(error) => {
+                        editor.set_status_message(format!("Error saving config: {error}"));
                     }
                 }
                 Ok(())
@@ -609,6 +599,7 @@ impl ExCommandParser {
                     }
                 }
             }
+            "saveconfig" | "savecfg" => ExCommand::SaveConfig,
             "b" => {
                 if parts.len() > 1 {
                     if let Ok(buffer_num) = parts[1].parse::<usize>() {

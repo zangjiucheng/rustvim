@@ -1,0 +1,110 @@
+# Example RustVim Configuration File
+# Copy this to ~/.rustvimrc and modify as needed
+# 
+# This file uses TOML format for configuration
+# All settings shown here with their default values
+# Uncomment and modify the settings you want to change
+
+# Tab and Indentation Settings
+# ============================
+
+# Number of spaces a tab character represents
+# Range: 1-16, Default: 4
+# Runtime command: :set tabstop=4 or :set ts=4
+tab_size = 4
+
+# Convert tab characters to spaces when typing
+# Default: true (recommended for most projects)
+# Runtime commands: :set expandtab/:set et or :set noexpandtab/:set noet
+expand_tabs = true
+
+# Automatically indent new lines based on previous line
+# Default: true
+# Runtime commands: :set autoindent/:set ai or :set noautoindent/:set noai
+auto_indent = true
+
+# Display Settings
+# ===============
+
+# Show line numbers in the left gutter
+# Default: false
+# Runtime commands: :set number/:set nu or :set nonumber/:set nonu
+show_line_numbers = false
+
+# Show relative line numbers (distances from current line)
+# When enabled, disables regular line numbers
+# Default: false
+# Runtime commands: :set relativenumber/:set rnu or :set norelativenumber/:set nornu
+show_relative_numbers = false
+
+# Wrap long lines at window edge
+# Default: false (vim-style nowrap)
+# Runtime commands: :set wrap or :set nowrap
+wrap_lines = false
+
+# Search Settings
+# ==============
+
+# Ignore case when searching (case-insensitive search)
+# Default: false
+# Runtime commands: :set ignorecase/:set ic or :set noignorecase/:set noic
+ignore_case = false
+
+# Smart case: case-insensitive unless uppercase letters are used
+# Only applies when ignore_case is true
+# Default: true
+# Runtime commands: :set smartcase/:set scs or :set nosmartcase/:set noscs
+smart_case = true
+
+# Highlight search matches
+# Default: true
+# Runtime commands: :set hlsearch/:set hls or :set nohlsearch/:set nohls
+highlight_search = true
+
+# Cursor and Scrolling
+# ===================
+
+# Keep this many lines visible above/below cursor when scrolling
+# Range: 0-50, Default: 3
+# Runtime command: :set scrolloff=3 or :set so=3
+scroll_offset = 3
+
+# ========================================
+# SETTINGS BELOW ARE DEFINED BUT NOT YET IMPLEMENTED IN :set COMMANDS
+# They can be set in the config file but won't work with :set commands yet
+# ========================================
+
+# Highlight the current line where cursor is positioned
+# Default: false
+# Note: Currently only works via config file, not :set command
+highlight_current_line = false
+
+# Show whitespace characters (spaces, tabs, etc.)
+# Default: false
+# Note: Currently only works via config file, not :set command
+show_whitespace = false
+
+# Highlight the line where the cursor is positioned (duplicate setting)
+# Default: false
+# Note: Currently only works via config file, not :set command
+cursor_line_highlight = false
+
+# Automatically save files when switching buffers or exiting
+# Default: false
+# Note: Currently only works via config file, not :set command
+auto_save = false
+
+# Create backup files before saving
+# Default: false
+# Note: Currently only works via config file, not :set command
+backup_files = false
+
+# Custom Key Mappings (Advanced)
+# ==============================
+# Format: "key_sequence" = "command_or_key_sequence"
+# This feature is planned for future implementation
+
+[custom_mappings]
+# Examples (not yet implemented):
+# "jj" = "<Esc>"  # Map 'jj' in insert mode to Escape
+# "<C-s>" = ":w<CR>"  # Map Ctrl+S to save file

@@ -3,6 +3,7 @@
 
 pub mod buffer;
 pub mod commands;
+pub mod config;
 pub mod editor;
 pub mod gap_buffer;
 pub mod history;

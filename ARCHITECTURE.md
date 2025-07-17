@@ -2,7 +2,7 @@
 
 ## Current Status: Full-Featured Vim-like Text Editor
 
-This is a comprehensive vim-like text editor implemented in Rust, featuring multiple editing modes, file I/O operations, search functionality, command-line interface, and robust undo/redo system.
+This is a comprehensive vim-like text editor implemented in Rust, featuring multiple editing modes, file I/O operations, search functionality, command-line interface, robust undo/redo system, and a flexible configuration system.
 
 ## Core Features
 
@@ -36,6 +36,9 @@ This is a comprehensive vim-like text editor implemented in Rust, featuring mult
 ✅ **Count Prefixes**: Numeric prefixes for commands (5j, 3dd, etc.)
 ✅ **Operator-Motion Commands**: Combine operators with motions (d5j, y3w)
 ✅ **Status Messages**: Vim-style error and informational messages
+✅ **Bell/Flash Feedback**: Immediate feedback for invalid keys
+✅ **Configurable Keymap**: Foundation for custom keybindings
+✅ **Configuration System**: TOML-based `~/.rustvimrc` config, runtime `:set` commands, automatic loading
 
 ### User Interface
 ✅ **Status Line**: File info, mode display, cursor position, line count
@@ -43,20 +46,29 @@ This is a comprehensive vim-like text editor implemented in Rust, featuring mult
 ✅ **Search Highlighting**: Visual feedback for search matches
 ✅ **Error Handling**: Comprehensive error messages and recovery
 
+## Configuration System (NEW)
+
+- **TOML-based config file**: `~/.rustvimrc` loaded automatically at startup
+- **Runtime settings**: Change options instantly with `:set` commands
+- **Comprehensive options**: Tab size, line numbers, search behavior, auto-save, and more
+- **Extensible**: Foundation for future keymap and plugin configuration
+- **Error handling**: Graceful fallback to defaults and robust validation
+
 ## Usage
 
 ### Starting the Editor
 ```bash
-# Start with empty buffer
-cargo run
-
-# Load a specific file
-cargo run filename.txt
-
-# Build and run
-cargo build --release
+cargo run [filename]
+# Or run the built binary
 ./target/release/rustvim [filename]
 ```
+
+### Configuration Setup
+```bash
+cp .rustvimrc.example ~/.rustvimrc
+# Edit ~/.rustvimrc to customize settings
+```
+- Change options at runtime with `:set` commands (e.g. `:set number`, `:set tabsize=8`)
 
 ### Basic Operations
 - **ESC**: Return to normal mode from any mode
@@ -104,15 +116,16 @@ cargo build --release
 ```
 src/
 ├── main.rs              # Application entry point
-├── lib.rs              # Module exports
-├── editor.rs           # Core editor state and main event loop
-├── io.rs              # File I/O operations (load, save, edit)
-├── buffer.rs          # Text buffer with newline preservation
-├── terminal.rs        # Terminal control and rendering
-├── input.rs           # Key input handling and parsing
-├── commands.rs        # Command processing and execution
-├── keymap.rs          # Key mapping and action system
-└── history.rs         # Undo/redo system
+├── lib.rs               # Module exports
+├── editor.rs            # Core editor state and main event loop
+├── io.rs                # File I/O operations (load, save, edit)
+├── buffer.rs            # Text buffer with newline preservation
+├── terminal.rs          # Terminal control and rendering
+├── input.rs             # Key input handling and parsing
+├── commands.rs          # Command processing and execution
+├── keymap.rs            # Key mapping and action system
+├── config.rs            # Configuration system (Day 20)
+└── history.rs           # Undo/redo system
 
 tests/
 ├── buffer_tests.rs         # Buffer functionality tests
@@ -168,6 +181,13 @@ tests/
 - **Visual mode support**: Actions for character, line, and block selection
 - **Extensible framework**: Easy addition of new commands and key bindings
 
+#### Configuration (`config.rs`)
+- **EditorConfig struct**: Holds all configurable options
+- **Automatic loading**: Loads `~/.rustvimrc` at startup, falls back to defaults
+- **Runtime updates**: `:set` command parser for instant changes
+- **Persistence**: Save config to file
+- **Extensible**: Ready for future keymap/plugin options
+
 #### Terminal Interface (`terminal.rs`)
 - **Raw mode control**: Direct terminal input/output
 - **ANSI escape sequences**: Cursor movement and text formatting
@@ -216,6 +236,12 @@ cargo test --test visual_block_mode_tests
 - **Standard key bindings**: Familiar navigation and editing commands
 - **Error messages**: Vim-style error codes and descriptions
 - **Mode transitions**: Proper ESC handling and mode switching
+
+### Extensibility
+- **Modular design**: Easy to add new config options, keybindings, or plugins
+- **Configuration foundation**: Centralized config enables runtime flexibility
+- **Keymap system**: Table-driven, supports future custom keybindings
+- **Plugin-ready**: Clean interfaces for future extension
 
 ## Future Extensions
 

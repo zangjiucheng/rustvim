@@ -1,6 +1,78 @@
 /// History management for undo/redo functionality
 use crate::buffer::Position;
 
+/// Tracks changes during an insert mode session
+#[derive(Debug, Clone)]
+pub struct InsertModeGroup {
+    pub start_pos: Position,
+    pub inserted_text: String,
+    pub deleted_text: String,
+    pub deletion_start_pos: Option<Position>,
+}
+
+impl InsertModeGroup {
+    /// Create a new insert mode group starting at the given position
+    pub fn new(start_pos: Position) -> Self {
+        Self {
+            start_pos,
+            inserted_text: String::new(),
+            deleted_text: String::new(),
+            deletion_start_pos: None,
+        }
+    }
+
+    /// Add inserted text to this group
+    pub fn add_insertion(&mut self, text: String) {
+        self.inserted_text.push_str(&text);
+    }
+
+    /// Add deleted text to this group
+    pub fn add_deletion(&mut self, pos: Position, text: String) {
+        if self.deletion_start_pos.is_none() {
+            self.deletion_start_pos = Some(pos);
+        }
+        self.deleted_text.push_str(&text);
+    }
+
+    /// Convert this group to an EditAction
+    pub fn to_edit_action(self) -> EditAction {
+        EditAction::insert_mode_session(
+            self.start_pos,
+            self.inserted_text,
+            self.deleted_text,
+            self.deletion_start_pos,
+        )
+    }
+
+    /// Check if this group has any changes
+    pub fn has_changes(&self) -> bool {
+        !self.inserted_text.is_empty() || !self.deleted_text.is_empty()
+    }
+
+    /// Add a single character to inserted text
+    pub fn add_char(&mut self, ch: char) {
+        self.inserted_text.push(ch);
+    }
+
+    /// Add a newline to inserted text
+    pub fn add_newline(&mut self) {
+        self.inserted_text.push('\n');
+    }
+
+    /// Remove the last character from inserted text
+    pub fn remove_char(&mut self) {
+        self.inserted_text.pop();
+    }
+
+    /// Add a deleted character at the given position
+    pub fn add_deleted_char(&mut self, ch: char, pos: Position) {
+        if self.deletion_start_pos.is_none() {
+            self.deletion_start_pos = Some(pos);
+        }
+        self.deleted_text.push(ch);
+    }
+}
+
 /// Represents different types of edit actions that can be undone/redone
 #[derive(Debug, Clone)]
 pub enum EditAction {

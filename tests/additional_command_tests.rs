@@ -29,10 +29,7 @@ mod additional_command_tests {
 
         // Should be on the new buffer
         assert_eq!(editor.current_buffer, initial_buffer_count);
-        assert_eq!(
-            *editor.filename(),
-            Some(test_file.to_str().unwrap().to_string())
-        );
+        assert_eq!(editor.filename(), Some(test_file.to_str().unwrap()));
         assert!(!editor.is_modified());
         assert!(editor.status_msg.is_some());
         assert!(editor.status_msg.as_ref().unwrap().contains("[New File]"));
@@ -106,10 +103,7 @@ mod additional_command_tests {
         editor.set_modified(true);
 
         editor.execute_ex_command(&format!("w {}", test_file.to_str().unwrap()));
-        assert_eq!(
-            *editor.filename(),
-            Some(test_file.to_str().unwrap().to_string())
-        );
+        assert_eq!(editor.filename(), Some(test_file.to_str().unwrap()));
         assert!(!editor.is_modified());
 
         // Verify file was written

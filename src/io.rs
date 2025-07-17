@@ -9,8 +9,8 @@ impl Editor {
             // Update the current filename if saving as
             self.set_filename(Some(name.clone()));
             name
-        } else if let Some(ref name) = self.filename().clone() {
-            name.clone()
+        } else if let Some(ref name) = self.filename() {
+            name.to_string()
         } else {
             self.set_status_message("E32: No file name".to_string());
             return false;

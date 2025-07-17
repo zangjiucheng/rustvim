@@ -67,7 +67,7 @@ jobs:
     #   Take the crate name from Cargo.toml’s `[package] name = "..."`
     #   GitHub runners default to UTF-8, so `$(...)` works on all three OSes.
     - name: Archive binary
-      shell: bash          # forces Bash even on Windows runners
+      shell: bash
       run: |
         CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
                      | jq -r '.packages[0].name')
