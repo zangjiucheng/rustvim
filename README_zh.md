@@ -374,7 +374,7 @@ cargo llvm-cov --lcov --output-path coverage.lcov
 本项目包含完善的 GitHub Actions 工作流，实现自动化质量保障：
 
 ### 🔧 构建工作流（`.github/workflows/build.yml`）
-- **跨平台构建**：自动构建 Linux、Windows、macOS
+- **跨平台构建**：自动构建 Linux、macOS
 - **质量检查**：运行格式化（`cargo fmt`）、lint（`cargo clippy`）和测试
 - **依赖缓存**：智能缓存优化构建时间
 - **自动发布**：推送标签时自动创建 GitHub 发布并附带二进制文件

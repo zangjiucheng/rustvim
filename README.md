@@ -374,7 +374,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 The project includes comprehensive GitHub Actions workflows for automated quality assurance:
 
 ### 🔧 Build Workflow (`.github/workflows/build.yml`)
-- **Cross-platform Builds**: Automatically builds for Linux, Windows, and macOS
+- **Cross-platform Builds**: Automatically builds for Linux and macOS
 - **Quality Checks**: Runs formatting (`cargo fmt`), linting (`cargo clippy`), and tests
 - **Dependency Caching**: Optimized build times with smart caching
 - **Automated Releases**: Creates GitHub releases with binaries when tags are pushed
