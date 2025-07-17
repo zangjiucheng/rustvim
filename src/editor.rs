@@ -182,9 +182,8 @@ impl Editor {
             history: History::new(),
         }];
 
-        // Load configuration from ~/.rustvimrc if it exists, otherwise use defaults
-        let config = crate::config::EditorConfig::load_default()
-            .unwrap_or_else(|_| crate::config::EditorConfig::default());
+        // Start with default configuration
+        let config = crate::config::EditorConfig::default();
 
         Self {
             mode: Mode::Normal,
@@ -213,6 +212,18 @@ impl Editor {
 
     /// Main editor event loop
     pub fn run(&mut self) -> std::io::Result<()> {
+        // Load configuration from ~/.rustvimrc if it exists
+        match self.load_config() {
+            Ok(()) => {
+                // Config loaded successfully - show brief confirmation
+                self.set_status_message("Configuration loaded".to_string());
+            }
+            Err(e) => {
+                // Config loading failed - show error but continue with defaults
+                self.set_status_message(format!("Config error: {e} (using defaults)"));
+            }
+        }
+
         // Enter raw mode
         let _raw_guard = self.terminal.enter_raw_mode()?;
 
