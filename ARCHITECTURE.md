@@ -39,6 +39,7 @@ This is a comprehensive vim-like text editor implemented in Rust, featuring mult
 ✅ **Bell/Flash Feedback**: Immediate feedback for invalid keys
 ✅ **Configurable Keymap**: Foundation for custom keybindings
 ✅ **Configuration System**: TOML-based `~/.rustvimrc` config, runtime `:set` commands, automatic loading
+✅ **Plugin System**: Native Rust plugin architecture for extending functionality
 
 ### User Interface
 ✅ **Status Line**: File info, mode display, cursor position, line count
@@ -103,6 +104,11 @@ cp .rustvimrc.example ~/.rustvimrc
 - **:wq** or **:x**: Save and quit
 - **:e filename**: Edit new file
 
+### Plugin Commands
+- **:wc**: Word count (shows word, line, character statistics)
+- **:hello**: Hello world demonstration command
+- **:sort**: Sort all lines in buffer alphabetically
+
 ### Search Operations
 - **/pattern**: Search forward for pattern
 - **?pattern**: Search backward for pattern
@@ -125,7 +131,11 @@ src/
 ├── commands.rs          # Command processing and execution
 ├── keymap.rs            # Key mapping and action system
 ├── config.rs            # Configuration system (Day 20)
-└── history.rs           # Undo/redo system
+├── history.rs           # Undo/redo system
+├── plugin.rs            # Plugin system core
+└── plugins/             # Plugin implementations
+    ├── mod.rs           # Plugin module organization
+    └── utils.rs         # Built-in utility plugins
 
 tests/
 ├── buffer_tests.rs         # Buffer functionality tests
@@ -188,6 +198,14 @@ tests/
 - **Persistence**: Save config to file
 - **Extensible**: Ready for future keymap/plugin options
 
+#### Plugin System (`plugin.rs`, `plugins/`)
+- **PluginRegistry**: Central registry for custom commands using function pointers
+- **Native Rust functions**: High-performance plugin execution without interpreter overhead
+- **ExCommand integration**: Unknown commands automatically check plugin registry
+- **Event system foundation**: EditorEvent enum for future event-driven plugins
+- **Organized structure**: Clean `plugins/` directory for easy expansion
+- **Built-in plugins**: Word count, hello world, and line sorting utilities
+
 #### Terminal Interface (`terminal.rs`)
 - **Raw mode control**: Direct terminal input/output
 - **ANSI escape sequences**: Cursor movement and text formatting
@@ -197,7 +215,7 @@ tests/
 
 ## Testing
 
-Comprehensive test suite with **148+ tests** covering:
+Comprehensive test suite with **175+ tests** covering:
 - Core buffer operations and edge cases
 - File I/O with various content types
 - Command mode functionality
@@ -205,6 +223,7 @@ Comprehensive test suite with **148+ tests** covering:
 - Undo/redo system integrity
 - Visual mode selection (character, line, and block)
 - Visual block operations and composite undo
+- Plugin system functionality and integration
 - Key mapping and action system
 - Newline preservation across platforms
 - Integration scenarios

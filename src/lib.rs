@@ -10,4 +10,6 @@ pub mod history;
 pub mod input;
 pub mod io;
 pub mod keymap;
+pub mod plugin;
+pub mod plugins;
 pub mod terminal;

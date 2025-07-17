@@ -49,6 +49,12 @@ search_highlight = true
 - Run quality checks: `cargo test && ./coverage.sh && cargo clippy`
 - Submit a pull request
 
+### Adding Plugin Commands
+- Create new plugin files in `src/plugins/`
+- Export modules in `src/plugins/mod.rs`
+- Register commands in the `register_builtin_plugins()` function
+- See **[docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md)** for detailed plugin development guide
+
 ## Quality Checks
 - Run all tests: `cargo test`
 - Code coverage: `./coverage.sh html` (see `target/llvm-cov/html/index.html`)
@@ -57,6 +63,7 @@ search_highlight = true
 
 ## Additional Resources
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — System design overview
+- **[docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md)** — Plugin development guide
 - **[docs/daily-summaries/](docs/daily-summaries/)** — Day-by-day progress
 - **[.rustvimrc.example](.rustvimrc.example)** — Example config file
 - **Vim Documentation** — [vimhelp.org](https://vimhelp.org/)

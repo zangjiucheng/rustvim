@@ -6,7 +6,7 @@ use crate::terminal::{CursorShape, Terminal};
 use std::time::Instant;
 
 /// Represents the current mode of the editor
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Mode {
     Normal,
     Insert,
@@ -120,6 +120,9 @@ pub struct Editor {
 
     /// Configuration flags (deprecated - moved to config)
     pub show_line_numbers: bool,
+
+    /// Plugin registry for extensible commands
+    pub plugin_registry: crate::plugin::PluginRegistry,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -185,6 +188,10 @@ impl Editor {
         // Start with default configuration
         let config = crate::config::EditorConfig::default();
 
+        // Create plugin registry and register all built-in plugins
+        let mut plugin_registry = crate::plugin::PluginRegistry::new();
+        crate::plugins::register_all_plugins(&mut plugin_registry);
+
         Self {
             mode: Mode::Normal,
             buffers,
@@ -207,6 +214,7 @@ impl Editor {
             status_msg_time: None,
             config: config.clone(),
             show_line_numbers: config.show_line_numbers, // Sync with config
+            plugin_registry,
         }
     }
 

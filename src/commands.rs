@@ -524,8 +524,19 @@ impl Command for ExCommand {
                 Ok(())
             }
             ExCommand::Unknown { command } => {
-                editor.set_status_message(format!("E492: Not an editor command: {command}"));
-                Ok(())
+                // Check if plugin exists and get the function
+                if let Some(plugin_fn) = editor.plugin_registry.get_ex_command(command) {
+                    match plugin_fn(editor) {
+                        Ok(()) => Ok(()),
+                        Err(e) => {
+                            editor.set_status_message(format!("Plugin error: {e}"));
+                            Ok(())
+                        }
+                    }
+                } else {
+                    editor.set_status_message(format!("E492: Not an editor command: {command}"));
+                    Ok(())
+                }
             }
         }
     }
