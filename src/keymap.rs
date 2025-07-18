@@ -631,6 +631,9 @@ impl KeymapProcessor {
 
         // Look up the action for this key in the current mode
         if let Some(action) = self.keymap.lookup(editor.mode, key) {
+            // DEBUG: Log the action being executed
+            // editor.set_status_message(format!("Executing action: {:?}", action));
+
             let result = self.execute_action(editor, action.clone())?;
 
             // Clear count after successful action

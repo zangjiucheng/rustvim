@@ -369,22 +369,23 @@ impl SyntaxHighlighter {
             for token in tokens {
                 // Only highlight tokens that are entirely on this line
                 if token.start_row == line_num && token.end_row == line_num {
+                    // Clamp indices to avoid out-of-bounds
+                    // FIXME: This is a temporary fix, should be improved later
+                    let safe_start = std::cmp::min(token.start_col, chars.len());
+                    let safe_end = std::cmp::min(token.end_col, chars.len());
+
                     // Add text before this token
-                    if token.start_col > last_pos {
-                        result
-                            .push_str(&chars[last_pos..token.start_col].iter().collect::<String>());
+                    if safe_start > last_pos {
+                        result.push_str(&chars[last_pos..safe_start].iter().collect::<String>());
                     }
 
                     // Add highlighted token
-                    let token_text = &chars
-                        [token.start_col..std::cmp::min(token.end_col, chars.len())]
-                        .iter()
-                        .collect::<String>();
+                    let token_text = &chars[safe_start..safe_end].iter().collect::<String>();
                     result.push_str(token.token_type.color().ansi_code());
                     result.push_str(token_text);
                     result.push_str(Color::Reset.ansi_code());
 
-                    last_pos = token.end_col;
+                    last_pos = safe_end;
                 }
             }
 

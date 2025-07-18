@@ -265,6 +265,9 @@ impl Editor {
                 self.clear_status_message();
             }
 
+            // DEBUG: Log the key for debugging purposes
+            // self.set_status_message(format!("Key pressed: {:?}", key));
+
             // Handle global commands first
             if key == crate::input::Key::Esc {
                 match self.mode {
@@ -348,8 +351,8 @@ impl Editor {
         // Exit raw mode and restore terminal settings
         self.terminal.exit_raw_mode(raw_guard)?;
 
-        // Final cleanup
-        self.refresh_screen()?;
+        // Clear the screen before exiting
+        self.terminal.clear_screen()?;
 
         Ok(())
     }
@@ -749,47 +752,6 @@ impl Editor {
         // Clamp column to line length
         let line_len = self.buffer().line_length(self.cursor().row);
         self.cursor_mut().col = col.min(line_len);
-    }
-
-    /// Move cursor up one line
-    pub fn cursor_up(&mut self) {
-        if self.cursor().row > 0 {
-            let new_row = self.cursor().row - 1;
-            let line_len = self.buffer().line_length(new_row);
-            self.cursor_mut().row = new_row;
-            // In normal mode, cursor should not go past the last character
-            self.cursor_mut().col = self.cursor().col.min(line_len.saturating_sub(1));
-        }
-    }
-
-    /// Move cursor down one line
-    pub fn cursor_down(&mut self) {
-        if self.cursor().row + 1 < self.buffer().line_count() {
-            let new_row = self.cursor().row + 1;
-            let line_len = self.buffer().line_length(new_row);
-            self.cursor_mut().row = new_row;
-            // In normal mode, cursor should not go past the last character
-            self.cursor_mut().col = self.cursor().col.min(line_len.saturating_sub(1));
-        }
-    }
-
-    /// Move cursor left one position
-    pub fn cursor_left(&mut self) {
-        if self.cursor().col > 0 {
-            self.cursor_mut().col -= 1;
-        }
-        // For now, don't wrap to previous line (keep it simple for Day 6)
-    }
-
-    /// Move cursor right one position
-    pub fn cursor_right(&mut self) {
-        let line_len = self.buffer().line_length(self.cursor().row);
-        // In normal mode, don't go past the last character
-        let max_col = line_len.saturating_sub(1);
-        if self.cursor().col < max_col {
-            self.cursor_mut().col += 1;
-        }
-        // For now, don't wrap to next line (keep it simple for Day 6)
     }
 
     /// Get current cursor position as Position

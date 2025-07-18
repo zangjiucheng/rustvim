@@ -1091,78 +1091,13 @@ pub struct MovementExecutor;
 impl MovementExecutor {
     /// Execute movement command
     pub fn execute_movement(editor: &mut Editor, command: MovementCommand, count: usize) {
-        for _ in 0..count {
-            match command {
-                MovementCommand::Left => {
-                    editor.cursor_left();
-                }
-                MovementCommand::Right => {
-                    editor.cursor_right();
-                }
-                MovementCommand::Up => {
-                    editor.cursor_up();
-                }
-                MovementCommand::Down => {
-                    editor.cursor_down();
-                }
-                MovementCommand::LineStart => {
-                    editor.cursor_mut().col = 0;
-                    break;
-                }
-                MovementCommand::LineFirstChar => {
-                    let line = if let Some(line) = editor.buffer().get_line(editor.cursor().row) {
-                        line
-                    } else {
-                        break;
-                    };
-
-                    let first_non_blank =
-                        line.chars().position(|c| !c.is_whitespace()).unwrap_or(0);
-                    editor.cursor_mut().col = first_non_blank;
-                    break;
-                }
-                MovementCommand::LineEnd => {
-                    let line_len = editor.buffer().line_length(editor.cursor().row);
-                    editor.cursor_mut().col = if line_len > 0 { line_len - 1 } else { 0 };
-                    break;
-                }
-                MovementCommand::FileStart => {
-                    editor.cursor_mut().row = 0;
-                    editor.cursor_mut().col = 0;
-                    break;
-                }
-                MovementCommand::FileEnd => {
-                    editor.cursor_mut().row = editor.buffer().line_count().saturating_sub(1);
-                    let line_len = editor.buffer().line_length(editor.cursor().row);
-                    editor.cursor_mut().col = if line_len > 0 { line_len - 1 } else { 0 };
-                    break;
-                }
-                MovementCommand::WordForward => {
-                    let mut row = editor.cursor().row;
-                    let mut col = editor.cursor().col;
-                    MotionCalculator::word_forward(editor, &mut row, &mut col);
-                    editor.cursor_mut().row = row;
-                    editor.cursor_mut().col = col;
-                }
-                MovementCommand::WordBackward => {
-                    let mut row = editor.cursor().row;
-                    let mut col = editor.cursor().col;
-                    MotionCalculator::word_backward(editor, &mut row, &mut col);
-                    editor.cursor_mut().row = row;
-                    editor.cursor_mut().col = col;
-                }
-                MovementCommand::WordEnd => {
-                    let mut row = editor.cursor().row;
-                    let mut col = editor.cursor().col;
-                    MotionCalculator::word_end(editor, &mut row, &mut col);
-                    editor.cursor_mut().row = row;
-                    editor.cursor_mut().col = col;
-                }
-                _ => {
-                    break;
-                }
-            }
-        }
+        let (new_row, new_col) = command.calculate_end_position(
+            editor,
+            (editor.cursor().row, editor.cursor().col),
+            count,
+        );
+        editor.cursor_mut().row = new_row;
+        editor.cursor_mut().col = new_col;
         editor.update_scroll();
     }
 }

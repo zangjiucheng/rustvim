@@ -7,6 +7,8 @@ use rustvim::editor::{Editor, Mode};
 
 #[cfg(test)]
 mod visual_mode_basic_tests {
+    use rustvim::input::Key;
+
     use super::*;
 
     // Helper function to create an editor with test content
@@ -232,15 +234,17 @@ mod visual_mode_basic_tests {
     fn test_visual_mode_preserves_selection_start() {
         let mut editor = create_test_editor();
 
+        let mut temp_keymap = std::mem::take(&mut editor.keymap_processor);
+
         // Enter visual mode at specific position
         editor.move_cursor(1, 3);
         editor.enter_visual_mode();
         let start_pos = editor.visual_start.unwrap();
 
         // Move cursor around
-        editor.cursor_right();
-        editor.cursor_down();
-        editor.cursor_left();
+        let _ = temp_keymap.process_key(&mut editor, &Key::Right);
+        let _ = temp_keymap.process_key(&mut editor, &Key::Down);
+        let _ = temp_keymap.process_key(&mut editor, &Key::Left);
 
         // Visual start should remain unchanged
         assert_eq!(editor.visual_start.unwrap().row, start_pos.row);
