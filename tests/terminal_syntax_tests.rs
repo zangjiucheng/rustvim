@@ -82,7 +82,7 @@ fn test_rust_syntax_highlighting_output() {
 
     // Check if language is available before setting
     let available_languages = highlighter.available_languages();
-    println!("Available languages: {available_languages:?}", );
+    println!("Available languages: {available_languages:?}");
 
     let rust_result = highlighter.set_language("rust");
     if rust_result.is_err() {

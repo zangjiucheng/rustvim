@@ -173,10 +173,10 @@ impl SyntaxHighlighter {
                         query,
                     },
                 );
-                eprintln!("✅ JavaScript language registered successfully");
+                eprintln!("✅ Python language registered successfully");
             }
             Err(e) => {
-                eprintln!("❌ Failed to register JavaScript language: {e}");
+                eprintln!("❌ Failed to register Python language: {e}");
             }
         }
 
