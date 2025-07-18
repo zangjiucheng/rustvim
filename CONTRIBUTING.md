@@ -26,6 +26,11 @@ cargo run [filename]
 2. Edit your preferences in `~/.rustvimrc` (TOML format)
 3. Settings auto-load at startup; change options anytime with `:set` commands
 
+#### Syntax Highlighting
+- Tree-sitter based syntax highlighting for supported languages
+- Enable/disable with `:set syntax` / `:set nosyntax` or via `~/.rustvimrc` (`syntax_highlighting = true`)
+- Automatic language detection based on file extension
+
 #### Example `.rustvimrc`
 ```toml
 tab_size = 4

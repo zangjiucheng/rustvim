@@ -503,6 +503,18 @@ impl Command for ExCommand {
                     Ok(message) => {
                         // Update the deprecated show_line_numbers field for compatibility
                         editor.show_line_numbers = editor.config.show_line_numbers;
+
+                        // Handle syntax highlighting toggle
+                        if (option == "syntax" || option == "nosyntax")
+                            && editor.config.syntax_highlighting
+                        {
+                            // Re-setup highlighting for current file
+                            let filename_opt = editor.filename().map(|s| s.to_string());
+                            if let Some(filename) = filename_opt {
+                                editor.setup_syntax_highlighting_for_file(&filename);
+                            }
+                        }
+
                         editor.set_status_message(message);
                     }
                     Err(error) => {

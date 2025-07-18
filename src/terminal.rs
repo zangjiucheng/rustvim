@@ -44,6 +44,13 @@ impl Terminal {
         RawModeGuard::new()
     }
 
+    /// Exit raw mode and restore terminal settings
+    pub fn exit_raw_mode(&self, guard: RawModeGuard) -> io::Result<()> {
+        // Dropping the guard restores the terminal settings
+        drop(guard);
+        Ok(())
+    }
+
     /// Get terminal size
     pub fn size(&self) -> (usize, usize) {
         self.size
@@ -119,6 +126,18 @@ impl Terminal {
     /// Write text with background color (for highlighting)
     pub fn write_highlighted(&self, text: &str) -> io::Result<()> {
         print!("\x1b[7m{text}\x1b[m"); // Invert colors
+        io::stdout().flush()
+    }
+
+    /// Write text with specific ANSI color
+    pub fn write_colored(&self, text: &str, color_code: &str) -> io::Result<()> {
+        print!("{color_code}{text}\x1b[0m"); // Reset color after text
+        io::stdout().flush()
+    }
+
+    /// Write text with syntax highlighting (preserves existing color codes)
+    pub fn write_syntax_highlighted(&self, text: &str) -> io::Result<()> {
+        print!("{text}");
         io::stdout().flush()
     }
 
