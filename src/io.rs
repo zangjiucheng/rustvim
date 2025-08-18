@@ -124,6 +124,9 @@ impl Editor {
                         self.buffers.push(buffer_info);
                     }
 
+                    // Setup syntax highlighting for the newly loaded file
+                    self.setup_syntax_highlighting_for_file(filename);
+
                     results.push(Ok(()));
                 }
                 Err(e) => {

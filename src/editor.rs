@@ -2,6 +2,7 @@ use crate::buffer::Buffer;
 use crate::commands::Command;
 use crate::history::{History, InsertModeGroup};
 use crate::keymap::KeymapProcessor;
+use crate::syntax::SyntaxHighlighter;
 use crate::terminal::{CursorShape, Terminal};
 use std::time::Instant;
 
@@ -123,6 +124,9 @@ pub struct Editor {
 
     /// Plugin registry for extensible commands
     pub plugin_registry: crate::plugin::PluginRegistry,
+
+    /// Syntax highlighter for color coding
+    pub syntax_highlighter: SyntaxHighlighter,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -215,6 +219,7 @@ impl Editor {
             config: config.clone(),
             show_line_numbers: config.show_line_numbers, // Sync with config
             plugin_registry,
+            syntax_highlighter: SyntaxHighlighter::new(),
         }
     }
 
@@ -233,7 +238,7 @@ impl Editor {
         }
 
         // Enter raw mode
-        let _raw_guard = self.terminal.enter_raw_mode()?;
+        let raw_guard = self.terminal.enter_raw_mode()?;
 
         // Create input handler
         let mut input_handler = crate::input::InputHandler::new();
@@ -259,6 +264,9 @@ impl Editor {
             if self.mode != Mode::Search && self.mode != Mode::Command {
                 self.clear_status_message();
             }
+
+            // DEBUG: Log the key for debugging purposes
+            // self.set_status_message(format!("Key pressed: {:?}", key));
 
             // Handle global commands first
             if key == crate::input::Key::Esc {
@@ -340,11 +348,17 @@ impl Editor {
             self.refresh_screen()?;
         }
 
+        // Exit raw mode and restore terminal settings
+        self.terminal.exit_raw_mode(raw_guard)?;
+
+        // Clear the screen before exiting
+        self.terminal.clear_screen()?;
+
         Ok(())
     }
 
     /// Refresh the screen display with current buffer content
-    pub fn refresh_screen(&self) -> std::io::Result<()> {
+    pub fn refresh_screen(&mut self) -> std::io::Result<()> {
         // Hide cursor during redraw
         self.terminal.hide_cursor()?;
 
@@ -377,7 +391,7 @@ impl Editor {
     }
 
     /// Draw buffer content to screen
-    fn draw_buffer(&self) -> std::io::Result<()> {
+    fn draw_buffer(&mut self) -> std::io::Result<()> {
         let rows = self.terminal.rows();
         let cols = self.terminal.cols();
 
@@ -461,27 +475,38 @@ impl Editor {
 
     /// Draw a line with visual mode highlighting if applicable
     fn draw_line_with_visual_highlight(
-        &self,
+        &mut self,
         line: &str,
         row: usize,
         max_width: usize,
     ) -> std::io::Result<()> {
+        // First apply syntax highlighting if enabled
+        let highlighted_line =
+            if self.config.syntax_highlighting && self.syntax_highlighter.is_available() {
+                self.syntax_highlighter.highlight_line(line, row)
+            } else {
+                line.to_string()
+            };
+
         if self.mode == Mode::Visual {
             if let Some((start, end)) = self.get_visual_selection() {
                 if self.visual_block_mode {
                     // Block-wise selection: highlight rectangular block
                     if row >= start.row && row <= end.row {
-                        let chars: Vec<char> = line.chars().collect();
+                        let _chars: Vec<char> = highlighted_line.chars().collect();
                         let min_col = std::cmp::min(start.col, end.col);
                         let max_col = std::cmp::max(start.col, end.col);
 
-                        let before = chars.iter().take(min_col).collect::<String>();
-                        let selected = chars
+                        // Note: For syntax highlighted text, this becomes complex
+                        // For now, fall back to plain text for visual selection on highlighted lines
+                        let plain_chars: Vec<char> = line.chars().collect();
+                        let before = plain_chars.iter().take(min_col).collect::<String>();
+                        let selected = plain_chars
                             .iter()
                             .skip(min_col)
                             .take(max_col + 1 - min_col)
                             .collect::<String>();
-                        let after = chars.iter().skip(max_col + 1).collect::<String>();
+                        let after = plain_chars.iter().skip(max_col + 1).collect::<String>();
 
                         self.terminal.write(&before)?;
                         if !selected.is_empty() {
@@ -489,17 +514,19 @@ impl Editor {
                         }
                         self.terminal.write(&after)?;
                     } else {
-                        // Not in block selection rows
-                        self.terminal.write_truncated(line, max_width)?;
+                        // Not in block selection rows - use syntax highlighting
+                        self.terminal.write_syntax_highlighted(
+                            &highlighted_line.chars().take(max_width).collect::<String>(),
+                        )?;
                     }
                 } else if self.visual_line_mode && row >= start.row && row <= end.row {
-                    // Line-wise selection: highlight entire line
+                    // Line-wise selection: highlight entire line (override syntax highlighting)
                     self.terminal
                         .write_highlighted(&line.chars().take(max_width).collect::<String>())?;
                 } else if !self.visual_line_mode {
                     // Character-wise selection
                     if start.row == end.row && row == start.row {
-                        // Single line selection
+                        // Single line selection - use plain text for selection
                         let chars: Vec<char> = line.chars().collect();
                         let before = chars.iter().take(start.col).collect::<String>();
                         let selected = chars
@@ -509,18 +536,47 @@ impl Editor {
                             .collect::<String>();
                         let after = chars.iter().skip(end.col + 1).collect::<String>();
 
-                        self.terminal.write(&before)?;
+                        // Apply syntax highlighting to non-selected parts
+                        if self.config.syntax_highlighting && self.syntax_highlighter.is_available()
+                        {
+                            let before_highlighted =
+                                self.syntax_highlighter.highlight_line(&before, row);
+                            let _after_highlighted =
+                                self.syntax_highlighter.highlight_line(&after, row);
+                            self.terminal
+                                .write_syntax_highlighted(&before_highlighted)?;
+                        } else {
+                            self.terminal.write(&before)?;
+                        }
+
                         if !selected.is_empty() {
                             self.terminal.write_highlighted(&selected)?;
                         }
-                        self.terminal.write(&after)?;
+
+                        if self.config.syntax_highlighting && self.syntax_highlighter.is_available()
+                        {
+                            let after_highlighted =
+                                self.syntax_highlighter.highlight_line(&after, row);
+                            self.terminal.write_syntax_highlighted(&after_highlighted)?;
+                        } else {
+                            self.terminal.write(&after)?;
+                        }
                     } else if row == start.row {
                         // First line of multi-line selection
                         let chars: Vec<char> = line.chars().collect();
                         let before = chars.iter().take(start.col).collect::<String>();
                         let selected = chars.iter().skip(start.col).collect::<String>();
 
-                        self.terminal.write(&before)?;
+                        if self.config.syntax_highlighting && self.syntax_highlighter.is_available()
+                        {
+                            let before_highlighted =
+                                self.syntax_highlighter.highlight_line(&before, row);
+                            self.terminal
+                                .write_syntax_highlighted(&before_highlighted)?;
+                        } else {
+                            self.terminal.write(&before)?;
+                        }
+
                         if !selected.is_empty() {
                             self.terminal.write_highlighted(&selected)?;
                         }
@@ -533,26 +589,42 @@ impl Editor {
                         if !selected.is_empty() {
                             self.terminal.write_highlighted(&selected)?;
                         }
-                        self.terminal.write(&after)?;
+
+                        if self.config.syntax_highlighting && self.syntax_highlighter.is_available()
+                        {
+                            let after_highlighted =
+                                self.syntax_highlighter.highlight_line(&after, row);
+                            self.terminal.write_syntax_highlighted(&after_highlighted)?;
+                        } else {
+                            self.terminal.write(&after)?;
+                        }
                     } else if row > start.row && row < end.row {
                         // Middle line of multi-line selection
                         self.terminal
                             .write_highlighted(&line.chars().take(max_width).collect::<String>())?;
                     } else {
-                        // Not in selection
-                        self.terminal.write_truncated(line, max_width)?;
+                        // Not in selection - use syntax highlighting
+                        self.terminal.write_syntax_highlighted(
+                            &highlighted_line.chars().take(max_width).collect::<String>(),
+                        )?;
                     }
                 } else {
-                    // Not in selection
-                    self.terminal.write_truncated(line, max_width)?;
+                    // Not in selection - use syntax highlighting
+                    self.terminal.write_syntax_highlighted(
+                        &highlighted_line.chars().take(max_width).collect::<String>(),
+                    )?;
                 }
             } else {
-                // No visual selection
-                self.terminal.write_truncated(line, max_width)?;
+                // No visual selection - use syntax highlighting
+                self.terminal.write_syntax_highlighted(
+                    &highlighted_line.chars().take(max_width).collect::<String>(),
+                )?;
             }
         } else {
-            // Not in visual mode
-            self.terminal.write_truncated(line, max_width)?;
+            // Not in visual mode - use syntax highlighting
+            self.terminal.write_syntax_highlighted(
+                &highlighted_line.chars().take(max_width).collect::<String>(),
+            )?;
         }
 
         Ok(())
@@ -680,47 +752,6 @@ impl Editor {
         // Clamp column to line length
         let line_len = self.buffer().line_length(self.cursor().row);
         self.cursor_mut().col = col.min(line_len);
-    }
-
-    /// Move cursor up one line
-    pub fn cursor_up(&mut self) {
-        if self.cursor().row > 0 {
-            let new_row = self.cursor().row - 1;
-            let line_len = self.buffer().line_length(new_row);
-            self.cursor_mut().row = new_row;
-            // In normal mode, cursor should not go past the last character
-            self.cursor_mut().col = self.cursor().col.min(line_len.saturating_sub(1));
-        }
-    }
-
-    /// Move cursor down one line
-    pub fn cursor_down(&mut self) {
-        if self.cursor().row + 1 < self.buffer().line_count() {
-            let new_row = self.cursor().row + 1;
-            let line_len = self.buffer().line_length(new_row);
-            self.cursor_mut().row = new_row;
-            // In normal mode, cursor should not go past the last character
-            self.cursor_mut().col = self.cursor().col.min(line_len.saturating_sub(1));
-        }
-    }
-
-    /// Move cursor left one position
-    pub fn cursor_left(&mut self) {
-        if self.cursor().col > 0 {
-            self.cursor_mut().col -= 1;
-        }
-        // For now, don't wrap to previous line (keep it simple for Day 6)
-    }
-
-    /// Move cursor right one position
-    pub fn cursor_right(&mut self) {
-        let line_len = self.buffer().line_length(self.cursor().row);
-        // In normal mode, don't go past the last character
-        let max_col = line_len.saturating_sub(1);
-        if self.cursor().col < max_col {
-            self.cursor_mut().col += 1;
-        }
-        // For now, don't wrap to next line (keep it simple for Day 6)
     }
 
     /// Get current cursor position as Position
@@ -1179,13 +1210,26 @@ impl Editor {
     /// Load configuration from default location (~/.rustvimrc)
     pub fn load_config(&mut self) -> Result<(), String> {
         match crate::config::EditorConfig::load_default() {
-            Ok(config) => {
+            Ok(mut config) => {
+                config.fill_missing_with_defaults();
                 self.config = config;
-                // Update deprecated fields for compatibility
                 self.show_line_numbers = self.config.show_line_numbers;
                 Ok(())
             }
-            Err(e) => Err(format!("Failed to load config: {e}")),
+            Err(e) => {
+                // Only show status bar message for critical TOML parse errors
+                if e.to_string().contains("TOML parse error") {
+                    let compressed = e.to_string().replace(['\n', '\r'], "");
+                    Err(format!(
+                        "Critical config file error: could not parse TOML. Using defaults. {compressed}"
+                    ))
+                } else {
+                    // For other errors, just use defaults and do not show in status bar
+                    self.config = crate::config::EditorConfig::default();
+                    self.show_line_numbers = self.config.show_line_numbers;
+                    Ok(())
+                }
+            }
         }
     }
 
@@ -1710,5 +1754,70 @@ impl Editor {
         }
 
         text
+    }
+
+    /// Setup syntax highlighting for a specific file
+    pub fn setup_syntax_highlighting_for_file(&mut self, filename: &str) {
+        if !self.config.syntax_highlighting || !self.config.auto_detect_language {
+            return;
+        }
+
+        if let Some(language) = self.syntax_highlighter.detect_language(filename) {
+            let language_str = language.to_string(); // Clone the language string
+            if let Err(e) = self.syntax_highlighter.set_language(&language_str) {
+                self.set_status_message(format!("Failed to set language {language_str}: {e}"));
+                return;
+            }
+
+            // Parse the current buffer content
+            if let Some(content) = self.get_current_buffer_content() {
+                if let Err(e) = self.syntax_highlighter.parse(&content) {
+                    self.set_status_message(format!("Failed to parse {language_str}: {e}"));
+                } else {
+                    self.set_status_message(format!(
+                        "Syntax highlighting enabled for {language_str}"
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Get the content of the current buffer as a string
+    fn get_current_buffer_content(&self) -> Option<String> {
+        self.buffers
+            .get(self.current_buffer)
+            .map(|buffer_info| buffer_info.buffer.to_string())
+    }
+
+    /// Update syntax highlighting when buffer content changes
+    pub fn update_syntax_highlighting(&mut self) {
+        if !self.config.syntax_highlighting {
+            return;
+        }
+
+        if let Some(content) = self.get_current_buffer_content() {
+            if let Err(e) = self.syntax_highlighter.parse(&content) {
+                // Silently handle parsing errors - don't spam user with messages
+                eprintln!("Syntax parsing error: {e}");
+            }
+        }
+    }
+
+    /// Toggle syntax highlighting on/off
+    pub fn toggle_syntax_highlighting(&mut self) {
+        self.config.syntax_highlighting = !self.config.syntax_highlighting;
+
+        let status = if self.config.syntax_highlighting {
+            // Re-setup highlighting for current file
+            let filename_opt = self.filename().map(|s| s.to_string());
+            if let Some(filename) = filename_opt {
+                self.setup_syntax_highlighting_for_file(&filename);
+            }
+            "Syntax highlighting enabled"
+        } else {
+            "Syntax highlighting disabled"
+        };
+
+        self.set_status_message(status.to_string());
     }
 }

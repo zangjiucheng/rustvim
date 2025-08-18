@@ -12,4 +12,5 @@ pub mod io;
 pub mod keymap;
 pub mod plugin;
 pub mod plugins;
+pub mod syntax;
 pub mod terminal;

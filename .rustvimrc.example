@@ -69,10 +69,18 @@ highlight_search = true
 # Runtime command: :set scrolloff=3 or :set so=3
 scroll_offset = 3
 
-# ========================================
-# SETTINGS BELOW ARE DEFINED BUT NOT YET IMPLEMENTED IN :set COMMANDS
-# They can be set in the config file but won't work with :set commands yet
-# ========================================
+# Syntax Highlighting
+# ===================
+
+# Enable syntax highlighting (Tree-sitter based)
+# Default: true
+# Note: Can be toggled via :set syntax/nosyntax
+syntax_highlighting = true
+
+# Auto-detect filetype/language based on file extension
+# Default: true
+# Note: Can be toggled via :set filetype/nofiletype
+auto_detect_language = true
 
 # Highlight the current line where cursor is positioned
 # Default: false
@@ -88,6 +96,12 @@ show_whitespace = false
 # Default: false
 # Note: Currently only works via config file, not :set command
 cursor_line_highlight = false
+
+
+# ========================================
+# SETTINGS BELOW ARE DEFINED BUT NOT YET IMPLEMENTED IN :set COMMANDS
+# They can be set in the config file but won't work with :set commands yet
+# ========================================
 
 # Automatically save files when switching buffers or exiting
 # Default: false

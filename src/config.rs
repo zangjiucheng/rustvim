@@ -55,6 +55,10 @@ pub struct EditorConfig {
     pub auto_save: bool,
     pub backup_files: bool,
 
+    /// Syntax highlighting settings
+    pub syntax_highlighting: bool,
+    pub auto_detect_language: bool,
+
     /// Custom key mappings (for future extension)
     pub custom_mappings: HashMap<String, String>,
 }
@@ -89,6 +93,10 @@ impl Default for EditorConfig {
             auto_save: false,
             backup_files: false,
 
+            // Syntax highlighting
+            syntax_highlighting: true,  // Enable by default
+            auto_detect_language: true, // Auto-detect based on file extension
+
             // Custom mappings
             custom_mappings: HashMap::new(),
         }
@@ -96,6 +104,42 @@ impl Default for EditorConfig {
 }
 
 impl EditorConfig {
+    /// Fill missing or invalid fields with defaults
+    pub fn fill_missing_with_defaults(&mut self) {
+        let defaults = Self::default();
+        macro_rules! fill_bool {
+            ($field:ident) => {
+                if self.$field != true && self.$field != false {
+                    self.$field = defaults.$field;
+                }
+            };
+        }
+        macro_rules! fill_usize {
+            ($field:ident) => {
+                if self.$field == 0 {
+                    self.$field = defaults.$field;
+                }
+            };
+        }
+        fill_bool!(syntax_highlighting);
+        fill_bool!(auto_detect_language);
+        fill_bool!(show_line_numbers);
+        fill_bool!(show_relative_numbers);
+        fill_bool!(wrap_lines);
+        fill_bool!(expand_tabs);
+        fill_bool!(auto_indent);
+        fill_bool!(ignore_case);
+        fill_bool!(smart_case);
+        fill_bool!(highlight_search);
+        fill_bool!(highlight_current_line);
+        fill_bool!(show_whitespace);
+        fill_bool!(cursor_line_highlight);
+        fill_bool!(auto_save);
+        fill_bool!(backup_files);
+        fill_usize!(scroll_offset);
+        fill_usize!(tab_size);
+        // Add more fields as needed
+    }
     /// Create a new configuration with default values
     pub fn new() -> Self {
         Self::default()
@@ -268,6 +312,24 @@ impl EditorConfig {
             "noautoindent" | "noai" => {
                 self.auto_indent = false;
                 Ok("auto-indent disabled".to_string())
+            }
+
+            // Syntax highlighting
+            "syntax" => {
+                self.syntax_highlighting = true;
+                Ok("syntax highlighting enabled".to_string())
+            }
+            "nosyntax" => {
+                self.syntax_highlighting = false;
+                Ok("syntax highlighting disabled".to_string())
+            }
+            "filetype" | "ft" => {
+                self.auto_detect_language = true;
+                Ok("automatic filetype detection enabled".to_string())
+            }
+            "nofiletype" | "noft" => {
+                self.auto_detect_language = false;
+                Ok("automatic filetype detection disabled".to_string())
             }
 
             _ => Err(format!("E518: Unknown option: {option}")),

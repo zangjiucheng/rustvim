@@ -631,6 +631,9 @@ impl KeymapProcessor {
 
         // Look up the action for this key in the current mode
         if let Some(action) = self.keymap.lookup(editor.mode, key) {
+            // DEBUG: Log the action being executed
+            // editor.set_status_message(format!("Executing action: {:?}", action));
+
             let result = self.execute_action(editor, action.clone())?;
 
             // Clear count after successful action
@@ -887,6 +890,8 @@ impl KeymapProcessor {
                 editor.insert_mode_char(c);
                 editor.cursor_mut().col += 1;
                 editor.set_modified(true);
+                // Update syntax highlighting after character insertion
+                editor.update_syntax_highlighting();
                 Ok(true)
             }
             Action::InsertNewline => {
@@ -898,6 +903,8 @@ impl KeymapProcessor {
                 editor.cursor_mut().col = 0;
                 editor.set_modified(true);
                 editor.update_scroll();
+                // Update syntax highlighting after newline insertion
+                editor.update_syntax_highlighting();
                 Ok(true)
             }
             Action::InsertBackspace => {
@@ -910,6 +917,8 @@ impl KeymapProcessor {
                     let deleted_char = editor.buffer_mut().delete_char(pos);
                     editor.insert_mode_backspace(deleted_char, Some(pos));
                     editor.set_modified(true);
+                    // Update syntax highlighting after character deletion
+                    editor.update_syntax_highlighting();
                 } else if editor.cursor().row > 0 {
                     // At beginning of line - join with previous line
                     editor.cursor_mut().row -= 1;
@@ -923,6 +932,8 @@ impl KeymapProcessor {
                     editor.insert_mode_backspace(deleted_char, Some(pos));
                     editor.set_modified(true);
                     editor.update_scroll();
+                    // Update syntax highlighting after line merge
+                    editor.update_syntax_highlighting();
                 }
                 Ok(true)
             }

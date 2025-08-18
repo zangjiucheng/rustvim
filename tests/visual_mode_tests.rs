@@ -516,9 +516,7 @@ mod visual_mode_tests {
         editor.enter_visual_mode();
 
         // Move cursor (simulating movement commands in visual mode)
-        editor.cursor_right();
-        editor.cursor_right();
-        editor.cursor_down();
+        editor.move_cursor(2, 4);
 
         // Should still be in visual mode
         assert_eq!(editor.mode, Mode::Visual);

@@ -113,12 +113,19 @@ search_highlight = true
 
 ## Architecture Overview
 
+### Syntax Highlighting
+- Tree-sitter based syntax highlighting for supported languages
+- Enable/disable with `:set syntax` / `:set nosyntax` or via `~/.rustvimrc` (`syntax_highlighting = true`)
+- Automatic language detection based on file extension (can be toggled)
+- Visual feedback for code structure and search matches
+
 ```
 src/
 ├── main.rs           # Entry point
 ├── editor.rs         # Core editor logic
 ├── buffer.rs         # Text buffer management
 ├── terminal.rs       # Terminal control
+├── syntax.rs         # Syntax highlighting
 ├── input.rs          # Key input handling
 ├── commands.rs       # Command processing
 ├── keymap.rs         # Key mapping system
@@ -132,6 +139,10 @@ src/
 
 tests/                # 160+ tests for reliability
 ```
+
+### Terminal Raw Mode
+- Enter raw mode with `Terminal::enter_raw_mode()` (returns a guard)
+- Exit raw mode and restore settings with `Terminal::exit_raw_mode(guard)` (drops the guard)
 
 ## Testing & Quality
 - Run all tests: `cargo test`

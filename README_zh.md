@@ -113,12 +113,19 @@ search_highlight = true
 
 ## 架构概览
 
+### 语法高亮
+- 基于 Tree-sitter 的语法高亮，支持多种语言
+- 可通过 `:set syntax` / `:set nosyntax` 或在 `~/.rustvimrc` 中设置（`syntax_highlighting = true`）启用/禁用
+- 根据文件扩展名自动检测语言（可切换）
+- 代码结构和搜索结果高亮显示
+
 ```
 src/
 ├── main.rs           # 应用入口
 ├── editor.rs         # 编辑器核心逻辑
 ├── buffer.rs         # 文本缓冲区管理
 ├── terminal.rs       # 终端控制
+├── syntax.rs         # 语法高亮
 ├── input.rs          # 按键输入处理
 ├── commands.rs       # 命令处理
 ├── keymap.rs         # 按键映射系统
@@ -132,6 +139,10 @@ src/
 
 tests/                # 160+ 测试保证可靠性
 ```
+
+## 终端原始模式
+- 进入原始模式：使用 `Terminal::enter_raw_mode()`，返回一个 guard 对象，期间终端输入不会被缓冲或回显。
+- 退出原始模式：调用 `Terminal::exit_raw_mode(guard)`，guard 被释放后终端设置自动恢复。
 
 ## 测试与质量
 - 运行所有测试：`cargo test`

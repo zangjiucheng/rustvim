@@ -117,6 +117,12 @@ cp .rustvimrc.example ~/.rustvimrc
 
 ## Architecture
 
+### Syntax Highlighting
+- Integrated Tree-sitter for fast, incremental syntax parsing and highlighting
+- Supports multiple languages with automatic detection based on file extension
+- Enable/disable via `:set syntax` / `:set nosyntax` or `syntax_highlighting = true` in config
+- Visual feedback for code structure, search matches, and selections
+
 ### Module Organization
 
 ```
@@ -127,10 +133,11 @@ src/
 ├── io.rs                # File I/O operations (load, save, edit)
 ├── buffer.rs            # Text buffer with newline preservation
 ├── terminal.rs          # Terminal control and rendering
+├── syntax.rs            # Syntax highlighting
 ├── input.rs             # Key input handling and parsing
 ├── commands.rs          # Command processing and execution
 ├── keymap.rs            # Key mapping and action system
-├── config.rs            # Configuration system (Day 20)
+├── config.rs             # Configuration system
 ├── history.rs           # Undo/redo system
 ├── plugin.rs            # Plugin system core
 └── plugins/             # Plugin implementations
@@ -207,11 +214,13 @@ tests/
 - **Built-in plugins**: Word count, hello world, and line sorting utilities
 
 #### Terminal Interface (`terminal.rs`)
-- **Raw mode control**: Direct terminal input/output
-- **ANSI escape sequences**: Cursor movement and text formatting
-- **Screen management**: Clear, scroll, and refresh operations
-- **Selection highlighting**: Visual feedback for text selection
-- **Cross-platform support**: Works on Unix/Linux/macOS
+ - **Raw mode control**: Direct terminal input/output
+   - Enter raw mode with `enter_raw_mode()` (returns RAII guard)
+   - Exit raw mode and restore settings with `exit_raw_mode(guard)` (drops guard)
+ - **ANSI escape sequences**: Cursor movement and text formatting
+ - **Screen management**: Clear, scroll, and refresh operations
+ - **Selection highlighting**: Visual feedback for text selection
+ - **Cross-platform support**: Works on Unix/Linux/macOS
 
 ## Testing
 
