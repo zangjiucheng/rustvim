@@ -57,7 +57,7 @@ jobs:
             artifact_suffix: linux-x86_64
             target: x86_64-unknown-linux-gnu
             build_type: release
-          # macOS builds
+          # macOS Intel builds
           - os: macos-latest
             artifact_suffix: macos-x86_64
             target: x86_64-apple-darwin
@@ -66,6 +66,7 @@ jobs:
             artifact_suffix: macos-x86_64
             target: x86_64-apple-darwin
             build_type: release
+          # macOS Apple Silicon builds
           - os: macos-latest
             artifact_suffix: macos-aarch64
             target: aarch64-apple-darwin
@@ -73,15 +74,6 @@ jobs:
           - os: macos-latest
             artifact_suffix: macos-aarch64
             target: aarch64-apple-darwin
-            build_type: release
-          # Windows builds
-          - os: windows-latest
-            artifact_suffix: windows-x86_64
-            target: x86_64-pc-windows-gnu
-            build_type: debug
-          - os: windows-latest
-            artifact_suffix: windows-x86_64
-            target: x86_64-pc-windows-gnu
             build_type: release
     runs-on: ${{ matrix.os }}
 
@@ -114,8 +106,7 @@ jobs:
       if: matrix.build_type == 'release'
       run: cargo build --release --target ${{ matrix.target }}
 
-    - name: Package the binary (Linux/macOS)
-      if: runner.os != 'Windows'
+    - name: Package the binary
       shell: bash
       run: |
         CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
@@ -125,19 +116,6 @@ jobs:
         else
           BIN_PATH="target/${{ matrix.target }}/debug/$CRATE_NAME"
           tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}-debug.tar.gz" "$BIN_PATH"
-        fi
-
-    - name: Package the binary (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
-        if [ '${{ matrix.build_type }}' = 'release' ]; then
-          BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME.exe"
-          7z a "${CRATE_NAME}-${{ matrix.artifact_suffix }}-release.zip" "$BIN_PATH.exe" "$BIN_PATH.exe.pdb" || true
-        else
-          BIN_PATH="target/${{ matrix.target }}/debug/$CRATE_NAME.exe"
-          7z a "${CRATE_NAME}-${{ matrix.artifact_suffix }}-debug.zip" "$BIN_PATH.exe" || true
         fi
 
     - name: Upload artifact

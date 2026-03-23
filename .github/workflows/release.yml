@@ -141,17 +141,21 @@ jobs:
           ### Downloads
           
           Choose the appropriate binary for your platform:
-          - **Linux (x86_64)**: `rustvim-${{ inputs.version }}-linux-x86_64.zip`
-          - **macOS (Intel)**: `rustvim-${{ inputs.version }}-macos-x86_64.zip`
-          - **macOS (Apple Silicon)**: `rustvim-${{ inputs.version }}-macos-aarch64.zip`
-          - **Windows (x86_64)**: `rustvim-${{ inputs.version }}-windows-x86_64.zip`
+          - **Linux (x86_64)**: `rustvim-${{ inputs.version }}-linux-x86_64-release.tar.gz`
+          - **macOS (Intel)**: `rustvim-${{ inputs.version }}-macos-x86_64-release.tar.gz`
+          - **macOS (Apple Silicon)**: `rustvim-${{ inputs.version }}-macos-aarch64-release.tar.gz`
           
           ### Installation
           
-          1. Download the appropriate zip file for your platform
-          2. Extract the binary
-          3. Make it executable (Linux/macOS): `chmod +x rustvim`
+          1. Download the appropriate archive for your platform
+          2. Extract: `tar -xzf rustvim-*.tar.gz`
+          3. Make it executable: `chmod +x rustvim`
           4. Move to your PATH or run directly: `./rustvim [filename]`
+          
+          ### Requirements
+          
+          - Unix-like system (Linux, macOS)
+          - Terminal emulator
           
           ### What's New
           
@@ -170,7 +174,7 @@ jobs:
         echo "### 📦 Release Details" >> $GITHUB_STEP_SUMMARY
         echo "- **Version**: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Pre-release**: ${{ inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: Linux (x86_64), macOS (Intel & Apple Silicon), Windows (x86_64)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platforms**: Linux (x86_64), macOS (Intel & Apple Silicon)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
         echo "- [View Release](https://github.com/zangjiucheng/rustvim/releases/tag/${{ inputs.version }})" >> $GITHUB_STEP_SUMMARY
