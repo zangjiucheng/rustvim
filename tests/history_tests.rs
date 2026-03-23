@@ -668,11 +668,50 @@ mod tests {
 
         // Verify we can undo again
         let undo3 = history.apply_undo(&mut buffer);
-        assert!(undo3.is_some(), "Third undo should work");
+        assert!(undo3.is_some(), "Third undo should work correctly");
         assert_eq!(
             buffer.get_line(0).unwrap(),
             "Hello World",
             "Third undo should work correctly"
         );
     }
+}
+
+#[test]
+fn test_insert_mode_group_add_char() {
+    let mut group = rustvim::history::InsertModeGroup::new(rustvim::buffer::Position::new(0, 0));
+
+    group.add_char('h');
+    group.add_char('e');
+    group.add_char('l');
+    group.add_char('l');
+    group.add_char('o');
+
+    assert_eq!(group.inserted_text, "hello");
+    assert!(group.has_changes());
+}
+
+#[test]
+fn test_insert_mode_group_add_newline() {
+    let mut group = rustvim::history::InsertModeGroup::new(rustvim::buffer::Position::new(0, 0));
+
+    group.add_char('h');
+    group.add_char('i');
+    group.add_newline();
+
+    assert_eq!(group.inserted_text, "hi\n");
+}
+
+#[test]
+fn test_insert_mode_group_add_deleted_char() {
+    let mut group = rustvim::history::InsertModeGroup::new(rustvim::buffer::Position::new(0, 0));
+
+    group.add_deleted_char('x', rustvim::buffer::Position::new(0, 2));
+    group.add_deleted_char('y', rustvim::buffer::Position::new(0, 3));
+
+    assert_eq!(group.deleted_text, "xy");
+    assert_eq!(
+        group.deletion_start_pos,
+        Some(rustvim::buffer::Position::new(0, 2))
+    );
 }

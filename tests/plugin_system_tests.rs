@@ -662,3 +662,203 @@ fn test_plugin_system_multiple_event_handlers() {
         assert!(msg.contains("Handler 3")); // Last handler wins
     }
 }
+
+#[test]
+fn test_sort_lines_command() {
+    let mut editor = Editor::new();
+
+    // Add unsorted content (one line each)
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(0, 0), 'z');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(0, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(1, 0), 'a');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(1, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(2, 0), 'm');
+
+    // Execute the sort command
+    if let Some(sort_fn) = editor.plugin_registry.get_ex_command("sort") {
+        let exec_result = sort_fn(&mut editor);
+        assert!(exec_result.is_ok());
+
+        // Check sorted content
+        assert_eq!(editor.buffer().get_line(0).unwrap(), "a");
+        assert_eq!(editor.buffer().get_line(1).unwrap(), "m");
+        assert_eq!(editor.buffer().get_line(2).unwrap(), "z");
+
+        // Check status message
+        assert!(editor.status_msg.is_some());
+        if let Some(msg) = &editor.status_msg {
+            assert!(msg.contains("Sorted"));
+        }
+    }
+}
+
+#[test]
+fn test_sort_empty_buffer() {
+    // Note: Buffer starts with 1 empty line by default, so we can't test the "no lines" case
+    // This test verifies the sort command works with single-line buffer
+    let mut editor = Editor::new();
+
+    // The buffer has 1 line by default
+    assert_eq!(editor.buffer().line_count(), 1);
+
+    // Execute sort on single-line buffer (works but reports 1 line)
+    let sort_fn = editor.plugin_registry.get_ex_command("sort");
+    assert!(sort_fn.is_some());
+
+    if let Some(sort_fn) = sort_fn {
+        let exec_result = sort_fn(&mut editor);
+        assert!(exec_result.is_ok());
+
+        // Should still have 1 line
+        assert_eq!(editor.buffer().line_count(), 1);
+
+        // Status message should say "Sorted 1 lines"
+        assert!(editor.status_msg.is_some());
+        if let Some(msg) = &editor.status_msg {
+            assert!(msg.contains("Sorted"));
+        }
+    }
+}
+
+#[test]
+fn test_reverse_lines_command() {
+    let mut editor = Editor::new();
+
+    // Add content
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(0, 0), 'a');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(0, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(1, 0), 'b');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(1, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(2, 0), 'c');
+
+    // Execute the reverse command
+    if let Some(reverse_fn) = editor.plugin_registry.get_ex_command("reverse") {
+        let exec_result = reverse_fn(&mut editor);
+        assert!(exec_result.is_ok());
+
+        // Check reversed content
+        assert_eq!(editor.buffer().get_line(0).unwrap(), "c");
+        assert_eq!(editor.buffer().get_line(1).unwrap(), "b");
+        assert_eq!(editor.buffer().get_line(2).unwrap(), "a");
+
+        // Check status message
+        assert!(editor.status_msg.is_some());
+        if let Some(msg) = &editor.status_msg {
+            assert!(msg.contains("Reversed"));
+        }
+    }
+}
+
+#[test]
+fn test_reverse_empty_buffer() {
+    let mut editor = Editor::new();
+
+    // Buffer starts with 1 line by default
+    assert_eq!(editor.buffer().line_count(), 1);
+
+    let reverse_fn = editor.plugin_registry.get_ex_command("reverse");
+    assert!(reverse_fn.is_some());
+
+    if let Some(reverse_fn) = reverse_fn {
+        let exec_result = reverse_fn(&mut editor);
+        assert!(exec_result.is_ok());
+
+        // Status message
+        assert!(editor.status_msg.is_some());
+        if let Some(msg) = &editor.status_msg {
+            assert!(msg.contains("Reversed"));
+        }
+    }
+}
+
+#[test]
+fn test_uniq_lines_command() {
+    let mut editor = Editor::new();
+
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(0, 0), 'a');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(0, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(1, 0), 'b');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(1, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(2, 0), 'a');
+    editor
+        .buffer_mut()
+        .insert_newline(rustvim::buffer::Position::new(2, 1));
+    editor
+        .buffer_mut()
+        .insert_char(rustvim::buffer::Position::new(3, 0), 'c');
+
+    // Execute the uniq command
+    if let Some(uniq_fn) = editor.plugin_registry.get_ex_command("uniq") {
+        let exec_result = uniq_fn(&mut editor);
+        assert!(exec_result.is_ok());
+
+        // Check unique content
+        assert_eq!(editor.buffer().get_line(0).unwrap(), "a");
+        assert_eq!(editor.buffer().get_line(1).unwrap(), "b");
+        assert_eq!(editor.buffer().get_line(2).unwrap(), "c");
+        assert!(editor.buffer().get_line(3).is_none());
+
+        // Check status message
+        assert!(editor.status_msg.is_some());
+        if let Some(msg) = &editor.status_msg {
+            assert!(msg.contains("Removed"));
+            assert!(msg.contains("unique"));
+        }
+    }
+}
+
+#[test]
+fn test_uniq_empty_buffer() {
+    let mut editor = Editor::new();
+
+    // Buffer starts with 1 line by default
+    assert_eq!(editor.buffer().line_count(), 1);
+
+    let uniq_fn = editor.plugin_registry.get_ex_command("uniq");
+    assert!(uniq_fn.is_some());
+
+    if let Some(uniq_fn) = uniq_fn {
+        let exec_result = uniq_fn(&mut editor);
+        assert!(exec_result.is_ok());
+
+        // Status message for single line (not truly "empty")
+        assert!(editor.status_msg.is_some());
+        if let Some(msg) = &editor.status_msg {
+            assert!(
+                msg.contains("unique"),
+                "message should contain 'unique': {}",
+                msg
+            );
+        }
+    }
+}
