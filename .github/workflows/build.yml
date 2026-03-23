@@ -106,42 +106,47 @@ jobs:
           ${{ runner.os }}-target-${{ matrix.target }}-
           ${{ runner.os }}-target-
 
-    - name: Build with cargo
-      run: |
-        if [ '${{ matrix.build_type }}' = 'release' ]; then
-          cargo build --release --target ${{ matrix.target }}
-        else
-          cargo build --target ${{ matrix.target }}
-        fi
+    - name: Build with cargo (debug)
+      if: matrix.build_type == 'debug'
+      run: cargo build --target ${{ matrix.target }}
 
-    - name: Package the binary
+    - name: Build with cargo (release)
+      if: matrix.build_type == 'release'
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Package the binary (Linux/macOS)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
-        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
-                     | jq -r '.packages[0].name')
-        
+        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
         if [ '${{ matrix.build_type }}' = 'release' ]; then
           BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME"
-          ARCHIVE="${CRATE_NAME}-${{ matrix.artifact_suffix }}-release.zip"
+          tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}-release.tar.gz" "$BIN_PATH"
         else
           BIN_PATH="target/${{ matrix.target }}/debug/$CRATE_NAME"
-          ARCHIVE="${CRATE_NAME}-${{ matrix.artifact_suffix }}-debug.zip"
+          tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}-debug.tar.gz" "$BIN_PATH"
         fi
-        
-        if [ '${{ runner.os }}' = 'Windows' ]; then
-          7z a "$ARCHIVE" "$BIN_PATH.exe" "$BIN_PATH.exe.pdb" 2>/dev/null || true
+
+    - name: Package the binary (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
+        if [ '${{ matrix.build_type }}' = 'release' ]; then
+          BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME.exe"
+          7z a "${CRATE_NAME}-${{ matrix.artifact_suffix }}-release.zip" "$BIN_PATH.exe" "$BIN_PATH.exe.pdb" || true
         else
-          tar -czf "$ARCHIVE" "$BIN_PATH" 2>/dev/null || tar -czf "$ARCHIVE" -C target . 2>/dev/null || echo "Packaging skipped"
+          BIN_PATH="target/${{ matrix.target }}/debug/$CRATE_NAME.exe"
+          7z a "${CRATE_NAME}-${{ matrix.artifact_suffix }}-debug.zip" "$BIN_PATH.exe" || true
         fi
-        echo "Created $ARCHIVE"
-        echo "ARCHIVE_NAME=$ARCHIVE" >> $GITHUB_ENV
-        echo "BINARY_NAME=$CRATE_NAME" >> $GITHUB_ENV
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_suffix }}-${{ matrix.build_type }}
-        path: ${{ env.ARCHIVE_NAME }}
+        path: |
+          *.zip
+          *.tar.gz
 
   build-summary:
     name: Build Summary
