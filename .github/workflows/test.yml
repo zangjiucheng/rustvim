@@ -24,11 +24,12 @@ jobs:
       with:
         path: |
           ~/.cargo/registry
-          ~/.cargo/git
+          ~/.cargo/git/db
           target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-
+          ${{ runner.os }}-rust-
+          ${{ runner.os }}-
           
     - name: Check formatting
       run: cargo fmt --all -- --check
