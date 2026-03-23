@@ -61,22 +61,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux
           - os: ubuntu-latest
             artifact_suffix: linux-x86_64
             target: x86_64-unknown-linux-gnu
-          # macOS Intel
           - os: macos-latest
             artifact_suffix: macos-x86_64
             target: x86_64-apple-darwin
-          # macOS Apple Silicon
           - os: macos-latest
             artifact_suffix: macos-aarch64
             target: aarch64-apple-darwin
-          # Windows
-          - os: windows-latest
-            artifact_suffix: windows-x86_64
-            target: x86_64-pc-windows-gnu
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -96,16 +89,10 @@ jobs:
     - name: Package binary
       shell: bash
       run: |
-        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
-                     | jq -r '.packages[0].name')
+        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
         BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME"
-        ARCHIVE="${CRATE_NAME}-${{ inputs.version }}-${{ matrix.artifact_suffix }}.zip"
-        
-        if [ '${{ runner.os }}' = 'Windows' ]; then
-          7z a "$ARCHIVE" "$BIN_PATH.exe" "$BIN_PATH.exe.pdb" 2>/dev/null || true
-        else
-          tar -czf "$ARCHIVE" "$BIN_PATH"
-        fi
+        ARCHIVE="${CRATE_NAME}-${{ inputs.version }}-${{ matrix.artifact_suffix }}.tar.gz"
+        tar -czf "$ARCHIVE" "$BIN_PATH"
         echo "Created $ARCHIVE"
         echo "ARCHIVE_NAME=$ARCHIVE" >> $GITHUB_ENV
 

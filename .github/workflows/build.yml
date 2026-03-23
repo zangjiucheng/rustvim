@@ -48,33 +48,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux builds
           - os: ubuntu-latest
             artifact_suffix: linux-x86_64
             target: x86_64-unknown-linux-gnu
-            build_type: debug
-          - os: ubuntu-latest
-            artifact_suffix: linux-x86_64
-            target: x86_64-unknown-linux-gnu
-            build_type: release
-          # macOS Intel builds
           - os: macos-latest
             artifact_suffix: macos-x86_64
             target: x86_64-apple-darwin
-            build_type: debug
-          - os: macos-latest
-            artifact_suffix: macos-x86_64
-            target: x86_64-apple-darwin
-            build_type: release
-          # macOS Apple Silicon builds
           - os: macos-latest
             artifact_suffix: macos-aarch64
             target: aarch64-apple-darwin
-            build_type: debug
-          - os: macos-latest
-            artifact_suffix: macos-aarch64
-            target: aarch64-apple-darwin
-            build_type: release
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -86,7 +68,6 @@ jobs:
         targets: ${{ matrix.target }}
 
     - name: Add target
-      if: matrix.target != ''
       run: rustup target add ${{ matrix.target }}
 
     - name: Cache target directory
@@ -98,33 +79,21 @@ jobs:
           ${{ runner.os }}-target-${{ matrix.target }}-
           ${{ runner.os }}-target-
 
-    - name: Build with cargo (debug)
-      if: matrix.build_type == 'debug'
-      run: cargo build --target ${{ matrix.target }}
-
-    - name: Build with cargo (release)
-      if: matrix.build_type == 'release'
+    - name: Build with cargo
       run: cargo build --release --target ${{ matrix.target }}
 
     - name: Package the binary
       shell: bash
       run: |
         CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
-        if [ '${{ matrix.build_type }}' = 'release' ]; then
-          BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME"
-          tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}-release.tar.gz" "$BIN_PATH"
-        else
-          BIN_PATH="target/${{ matrix.target }}/debug/$CRATE_NAME"
-          tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}-debug.tar.gz" "$BIN_PATH"
-        fi
+        BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME"
+        tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}.tar.gz" "$BIN_PATH"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.artifact_suffix }}-${{ matrix.build_type }}
-        path: |
-          *.zip
-          *.tar.gz
+        name: ${{ matrix.artifact_suffix }}
+        path: "*.tar.gz"
 
   build-summary:
     name: Build Summary
