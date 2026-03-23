@@ -281,7 +281,9 @@ impl SyntaxHighlighter {
             .parse(text, self.current_tree.as_ref())
             .ok_or("Failed to parse text")?;
         self.current_tree = Some(tree);
-        self.tokens_cache.clear(); // Clear cache on reparse
+        // Only clear cache for visible lines (first 100 lines) to improve performance
+        // This prevents full cache clear on every keystroke while still keeping highlighting accurate
+        self.tokens_cache.retain(|&line, _| line >= 100);
         Ok(())
     }
 

@@ -101,6 +101,9 @@ pub struct Editor {
     /// Position of current search match (for highlighting)
     pub search_match: Option<(usize, usize, usize)>, // (row, col, length)
 
+    /// Last character searched with f/F/t/T (for ; and , repeat)
+    pub last_find_char: Option<char>,
+
     /// Current command input buffer (while typing command)
     pub command_input: String,
 
@@ -127,6 +130,10 @@ pub struct Editor {
 
     /// Syntax highlighter for color coding
     pub syntax_highlighter: SyntaxHighlighter,
+
+    // Debouncing for syntax highlighting updates
+    last_syntax_update: Instant,
+    syntax_update_debounce_ms: u64,
 }
 
 /// Represents the content and type of yanked/deleted text
@@ -210,6 +217,7 @@ impl Editor {
             search_query: None,
             search_input: String::new(),
             search_match: None,
+            last_find_char: None,
             command_input: String::new(),
             keymap_processor: KeymapProcessor::new(),
             visual_start: None,
@@ -220,6 +228,9 @@ impl Editor {
             show_line_numbers: config.show_line_numbers, // Sync with config
             plugin_registry,
             syntax_highlighter: SyntaxHighlighter::new(),
+            // Debouncing for syntax highlighting updates
+            last_syntax_update: Instant::now(),
+            syntax_update_debounce_ms: 100, // 100ms debounce
         }
     }
 
@@ -1441,9 +1452,9 @@ impl Editor {
             }
         }
     }
-
-    // Visual mode handling
 }
+
+// Visual mode handling
 
 impl Editor {
     // === Visual Mode Methods ===
@@ -1789,11 +1800,19 @@ impl Editor {
             .map(|buffer_info| buffer_info.buffer.to_string())
     }
 
-    /// Update syntax highlighting when buffer content changes
+    /// Update syntax highlighting when buffer content changes with debouncing
     pub fn update_syntax_highlighting(&mut self) {
         if !self.config.syntax_highlighting {
             return;
         }
+
+        // Debounce syntax highlighting updates
+        let now = Instant::now();
+        let elapsed_ms = now.duration_since(self.last_syntax_update).as_millis() as u64;
+        if elapsed_ms < self.syntax_update_debounce_ms {
+            return; // Too soon since last update, skip
+        }
+        self.last_syntax_update = now;
 
         if let Some(content) = self.get_current_buffer_content() {
             if let Err(e) = self.syntax_highlighter.parse(&content) {

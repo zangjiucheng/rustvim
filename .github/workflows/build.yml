@@ -3,6 +3,8 @@ name: Build RustVim
 on:
   push:
     branches: [ main ]
+  pull_request:
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -14,20 +16,21 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@1.85.0
+      uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
       
     - name: Cache cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
-          ~/.cargo/git
+          ~/.cargo/git/db
           target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-
+          ${{ runner.os }}-rust-
+          ${{ runner.os }}-
           
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -39,46 +42,70 @@ jobs:
       run: cargo test --all-features
 
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.os }}-${{ matrix.build_type }})
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_suffix: linux
+            artifact_suffix: linux-x86_64
             target: x86_64-unknown-linux-gnu
-          - os: macos-15
-            artifact_suffix: macos
+          - os: macos-latest
+            artifact_suffix: macos-x86_64
             target: x86_64-apple-darwin
+          - os: macos-latest
+            artifact_suffix: macos-aarch64
+            target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
 
     steps:
-    # --- 2. Checkout code ----------------------------------------------------
     - uses: actions/checkout@v4
 
-    # --- 3. Install the Rust toolchain ---------------------------------------
-    - uses: dtolnay/rust-toolchain@1.85.0
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
 
-    # --- 4. Build in release mode -------------------------------------------
+    - name: Add target
+      run: rustup target add ${{ matrix.target }}
+
+    - name: Cache target directory
+      uses: actions/cache@v4
+      with:
+        path: target/${{ matrix.target }}
+        key: ${{ runner.os }}-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-target-${{ matrix.target }}-
+          ${{ runner.os }}-target-
+
     - name: Build with cargo
-      run: cargo build --release
+      run: cargo build --release --target ${{ matrix.target }}
 
-    # --- 5. Package the binary ----------------------------------------------
-    #   Take the crate name from Cargo.toml’s `[package] name = "..."`
-    #   GitHub runners default to UTF-8, so `$(...)` works on all three OSes.
-    - name: Archive binary
+    - name: Package the binary
       shell: bash
       run: |
-        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
-                     | jq -r '.packages[0].name')
-        BIN_PATH="target/release/$CRATE_NAME"
-        ARCHIVE="${CRATE_NAME}-${{ matrix.artifact_suffix }}.zip"
-        7z a "$ARCHIVE" "$BIN_PATH"*   # 7-Zip is pre-installed on runners
-        echo "Created $ARCHIVE"
+        CRATE_NAME=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].name')
+        BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME"
+        tar -czf "${CRATE_NAME}-${{ matrix.artifact_suffix }}.tar.gz" "$BIN_PATH"
 
-    # --- 6. Upload for download ---------------------------------------------
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ runner.os }}-binary
-        path: "*.zip"
+        name: ${{ matrix.artifact_suffix }}
+        path: "*.tar.gz"
+
+  build-summary:
+    name: Build Summary
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        pattern: '*'
+        merge-multiple: true
+        
+    - name: List artifacts
+      run: ls -la artifacts/

@@ -30,7 +30,7 @@
 //! let processor = KeymapProcessor::with_config(config);
 //! ```
 
-use crate::commands::{Command, EditCommand, ModeSwitchCommand, MovementCommand};
+use crate::commands::{Command, EditCommand, ModeSwitchCommand, MovementCommand, TextObject};
 use crate::editor::{Editor, Mode};
 use crate::input::Key;
 use std::collections::HashMap;
@@ -95,6 +95,26 @@ pub enum PendingAction {
     Yank,
     /// Change operator waiting for motion
     Change,
+    /// Delete operator waiting for text object (inner)
+    DeleteInnerObject,
+    /// Delete operator waiting for text object (around)
+    DeleteAroundObject,
+    /// Yank operator waiting for text object (inner)
+    YankInnerObject,
+    /// Yank operator waiting for text object (around)
+    YankAroundObject,
+    /// Change operator waiting for text object (inner)
+    ChangeInnerObject,
+    /// Change operator waiting for text object (around)
+    ChangeAroundObject,
+    /// Find char forward waiting for character: f
+    FindCharForward,
+    /// Find char backward waiting for character: F
+    FindCharBackward,
+    /// Till char forward waiting for character: t
+    TillCharForward,
+    /// Till char backward waiting for character: T
+    TillCharBackward,
 }
 
 /// Represents an operator waiting for a motion
@@ -305,6 +325,32 @@ impl Keymap {
         keymap.insert(Key::Char('g'), Action::Pending(PendingAction::FirstG));
         keymap.insert(Key::Ctrl('u'), Action::Move(MovementCommand::PageUp));
         keymap.insert(Key::Ctrl('d'), Action::Move(MovementCommand::PageDown));
+
+        // === Find Character Motions ===
+        keymap.insert(
+            Key::Char('f'),
+            Action::Pending(PendingAction::FindCharForward),
+        );
+        keymap.insert(
+            Key::Char('F'),
+            Action::Pending(PendingAction::FindCharBackward),
+        );
+        keymap.insert(
+            Key::Char('t'),
+            Action::Pending(PendingAction::TillCharForward),
+        );
+        keymap.insert(
+            Key::Char('T'),
+            Action::Pending(PendingAction::TillCharBackward),
+        );
+        keymap.insert(
+            Key::Char(';'),
+            Action::Move(MovementCommand::RepeatFindForward),
+        );
+        keymap.insert(
+            Key::Char(','),
+            Action::Move(MovementCommand::RepeatFindBackward),
+        );
 
         // === Mode Switching ===
         keymap.insert(
@@ -763,13 +809,16 @@ impl KeymapProcessor {
                 }
             }
             PendingAction::Delete => {
-                // Handle delete operator + motion
                 if key == &Key::Char('d') {
-                    // 'dd' - delete line
                     EditCommand::DeleteLine.execute(editor)?;
                     Ok(true)
+                } else if key == &Key::Char('i') {
+                    self.pending_action = Some(PendingAction::DeleteInnerObject);
+                    Ok(true)
+                } else if key == &Key::Char('a') {
+                    self.pending_action = Some(PendingAction::DeleteAroundObject);
+                    Ok(true)
                 } else if let Some(Action::Move(movement)) = self.keymap.lookup(Mode::Normal, key) {
-                    // Delete from cursor to end of movement
                     self.execute_delete_motion(editor, movement.clone())?;
                     Ok(true)
                 } else {
@@ -777,13 +826,16 @@ impl KeymapProcessor {
                 }
             }
             PendingAction::Yank => {
-                // Handle yank operator + motion
                 if key == &Key::Char('y') {
-                    // 'yy' - yank line
                     EditCommand::YankLine.execute(editor)?;
                     Ok(true)
+                } else if key == &Key::Char('i') {
+                    self.pending_action = Some(PendingAction::YankInnerObject);
+                    Ok(true)
+                } else if key == &Key::Char('a') {
+                    self.pending_action = Some(PendingAction::YankAroundObject);
+                    Ok(true)
                 } else if let Some(Action::Move(movement)) = self.keymap.lookup(Mode::Normal, key) {
-                    // Yank from cursor to end of movement
                     self.execute_yank_motion(editor, movement.clone())?;
                     Ok(true)
                 } else {
@@ -791,8 +843,131 @@ impl KeymapProcessor {
                 }
             }
             PendingAction::Change => {
-                // TODO: Implement change operator for future
-                Ok(false)
+                if key == &Key::Char('c') {
+                    EditCommand::ChangeLine.execute(editor)?;
+                    Ok(true)
+                } else if key == &Key::Char('i') {
+                    self.pending_action = Some(PendingAction::ChangeInnerObject);
+                    Ok(true)
+                } else if key == &Key::Char('a') {
+                    self.pending_action = Some(PendingAction::ChangeAroundObject);
+                    Ok(true)
+                } else if let Some(Action::Move(movement)) = self.keymap.lookup(Mode::Normal, key) {
+                    self.execute_change_motion(editor, movement.clone())?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::DeleteInnerObject => {
+                if let Some(text_obj) = self.parse_inner_text_object(key) {
+                    let movement = MovementCommand::TextObject(text_obj);
+                    self.execute_delete_motion(editor, movement)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::DeleteAroundObject => {
+                if let Some(text_obj) = self.parse_around_text_object(key) {
+                    let movement = MovementCommand::TextObject(text_obj);
+                    self.execute_delete_motion(editor, movement)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::YankInnerObject => {
+                if let Some(text_obj) = self.parse_inner_text_object(key) {
+                    let movement = MovementCommand::TextObject(text_obj);
+                    self.execute_yank_motion(editor, movement)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::YankAroundObject => {
+                if let Some(text_obj) = self.parse_around_text_object(key) {
+                    let movement = MovementCommand::TextObject(text_obj);
+                    self.execute_yank_motion(editor, movement)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::ChangeInnerObject => {
+                if let Some(text_obj) = self.parse_inner_text_object(key) {
+                    let movement = MovementCommand::TextObject(text_obj);
+                    self.execute_change_motion(editor, movement)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::ChangeAroundObject => {
+                if let Some(text_obj) = self.parse_around_text_object(key) {
+                    let movement = MovementCommand::TextObject(text_obj);
+                    self.execute_change_motion(editor, movement)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::FindCharForward => {
+                if let Key::Char(c) = key {
+                    editor.last_find_char = Some(*c);
+                    let count = self.pending_count.unwrap_or(1);
+                    crate::commands::MovementExecutor::execute_movement(
+                        editor,
+                        MovementCommand::FindCharForward(*c),
+                        count,
+                    );
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::FindCharBackward => {
+                if let Key::Char(c) = key {
+                    editor.last_find_char = Some(*c);
+                    let count = self.pending_count.unwrap_or(1);
+                    crate::commands::MovementExecutor::execute_movement(
+                        editor,
+                        MovementCommand::FindCharBackward(*c),
+                        count,
+                    );
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::TillCharForward => {
+                if let Key::Char(c) = key {
+                    editor.last_find_char = Some(*c);
+                    let count = self.pending_count.unwrap_or(1);
+                    crate::commands::MovementExecutor::execute_movement(
+                        editor,
+                        MovementCommand::TillCharForward(*c),
+                        count,
+                    );
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            PendingAction::TillCharBackward => {
+                if let Key::Char(c) = key {
+                    editor.last_find_char = Some(*c);
+                    let count = self.pending_count.unwrap_or(1);
+                    crate::commands::MovementExecutor::execute_movement(
+                        editor,
+                        MovementCommand::TillCharBackward(*c),
+                        count,
+                    );
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
             }
         }
     }
@@ -1022,6 +1197,34 @@ impl KeymapProcessor {
 
     // ---- Motion Execution Helpers ----
 
+    /// Parse an inner text object from a key (after 'i')
+    fn parse_inner_text_object(&self, key: &Key) -> Option<TextObject> {
+        match key {
+            Key::Char('w') => Some(TextObject::InnerWord),
+            Key::Char('"') => Some(TextObject::InnerQuote),
+            Key::Char('\'') => Some(TextObject::InnerSingleQuote),
+            Key::Char('(') | Key::Char(')') => Some(TextObject::InnerParen),
+            Key::Char('[') | Key::Char(']') => Some(TextObject::InnerBracket),
+            Key::Char('{') | Key::Char('}') => Some(TextObject::InnerBrace),
+            Key::Char('<') | Key::Char('>') => Some(TextObject::InnerAngle),
+            _ => None,
+        }
+    }
+
+    /// Parse an around text object from a key (after 'a')
+    fn parse_around_text_object(&self, key: &Key) -> Option<TextObject> {
+        match key {
+            Key::Char('w') => Some(TextObject::AroundWord),
+            Key::Char('"') => Some(TextObject::AroundQuote),
+            Key::Char('\'') => Some(TextObject::AroundSingleQuote),
+            Key::Char('(') | Key::Char(')') => Some(TextObject::AroundParen),
+            Key::Char('[') | Key::Char(']') => Some(TextObject::AroundBracket),
+            Key::Char('{') | Key::Char('}') => Some(TextObject::AroundBrace),
+            Key::Char('<') | Key::Char('>') => Some(TextObject::AroundAngle),
+            _ => None,
+        }
+    }
+
     /// Execute delete with motion
     fn execute_delete_motion(
         &self,
@@ -1041,6 +1244,17 @@ impl KeymapProcessor {
     ) -> Result<(), String> {
         let count = self.pending_count.unwrap_or(1);
         crate::commands::OperatorExecutor::execute_yank_motion(editor, movement, count);
+        Ok(())
+    }
+
+    /// Execute change with motion
+    fn execute_change_motion(
+        &self,
+        editor: &mut Editor,
+        movement: MovementCommand,
+    ) -> Result<(), String> {
+        let count = self.pending_count.unwrap_or(1);
+        crate::commands::OperatorExecutor::execute_change_motion(editor, movement, count);
         Ok(())
     }
 }

@@ -83,6 +83,37 @@ pub enum MovementCommand {
     /// Page movements
     PageUp, // Ctrl-U
     PageDown, // Ctrl-D
+
+    /// Text objects
+    TextObject(TextObject),
+
+    /// Find character motions
+    FindCharForward(char), // f
+    FindCharBackward(char), // F
+    TillCharForward(char),  // t
+    TillCharBackward(char), // T
+
+    /// Repeat last find (uses stored character)
+    RepeatFindForward, // ;
+    RepeatFindBackward, // ,
+}
+
+#[derive(Debug, Clone)]
+pub enum TextObject {
+    InnerWord,         // iw - inner word
+    AroundWord,        // aw - a word
+    InnerQuote,        // i" - inside quotes
+    AroundQuote,       // a" - a quote
+    InnerSingleQuote,  // i' - inside single quotes
+    AroundSingleQuote, // a' - a single quote
+    InnerParen,        // i( or i) - inside parentheses
+    AroundParen,       // a( or a) - a parentheses
+    InnerBracket,      // i[ - inside brackets
+    AroundBracket,     // a[ - a bracket
+    InnerBrace,        // i{ - inside braces
+    AroundBrace,       // a{ - a brace
+    InnerAngle,        // i< - inside angle brackets
+    AroundAngle,       // a< - an angle bracket
 }
 
 impl Motion for MovementCommand {
@@ -172,6 +203,95 @@ impl Motion for MovementCommand {
                     temp_col = temp_col.min(line_len.saturating_sub(1));
                     break;
                 }
+                MovementCommand::TextObject(text_obj) => {
+                    let (end_row, end_col) =
+                        text_obj.calculate_end_position(editor, (temp_row, temp_col), 1);
+                    temp_row = end_row;
+                    temp_col = end_col;
+                    break;
+                }
+                MovementCommand::FindCharForward(c) => {
+                    if let Some(line) = editor.buffer().get_line(temp_row) {
+                        let mut search_pos = temp_col + 1;
+                        while search_pos < line.len() {
+                            if line.chars().nth(search_pos) == Some(*c) {
+                                temp_col = search_pos;
+                                break;
+                            }
+                            search_pos += 1;
+                        }
+                    }
+                    break;
+                }
+                MovementCommand::FindCharBackward(c) => {
+                    if let Some(line) = editor.buffer().get_line(temp_row) {
+                        let mut search_pos = temp_col;
+                        while search_pos > 0 {
+                            search_pos -= 1;
+                            if line.chars().nth(search_pos) == Some(*c) {
+                                temp_col = search_pos;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                MovementCommand::TillCharForward(c) => {
+                    if let Some(line) = editor.buffer().get_line(temp_row) {
+                        let mut search_pos = temp_col + 1;
+                        while search_pos < line.len() {
+                            if line.chars().nth(search_pos) == Some(*c) {
+                                temp_col = search_pos.saturating_sub(1);
+                                break;
+                            }
+                            search_pos += 1;
+                        }
+                    }
+                    break;
+                }
+                MovementCommand::TillCharBackward(c) => {
+                    if let Some(line) = editor.buffer().get_line(temp_row) {
+                        let mut search_pos = temp_col;
+                        while search_pos > 0 {
+                            search_pos -= 1;
+                            if line.chars().nth(search_pos) == Some(*c) {
+                                temp_col = (search_pos + 1).min(line.len().saturating_sub(1));
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                MovementCommand::RepeatFindForward => {
+                    if let Some(c) = editor.last_find_char {
+                        if let Some(line) = editor.buffer().get_line(temp_row) {
+                            let mut search_pos = temp_col + 1;
+                            while search_pos < line.len() {
+                                if line.chars().nth(search_pos) == Some(c) {
+                                    temp_col = search_pos;
+                                    break;
+                                }
+                                search_pos += 1;
+                            }
+                        }
+                    }
+                    break;
+                }
+                MovementCommand::RepeatFindBackward => {
+                    if let Some(c) = editor.last_find_char {
+                        if let Some(line) = editor.buffer().get_line(temp_row) {
+                            let mut search_pos = temp_col;
+                            while search_pos > 0 {
+                                search_pos -= 1;
+                                if line.chars().nth(search_pos) == Some(c) {
+                                    temp_col = search_pos;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
             }
         }
 
@@ -182,8 +302,213 @@ impl Motion for MovementCommand {
         match self {
             MovementCommand::FileStart |  // gg - go to start of file
             MovementCommand::FileEnd => true,  // G - go to end of file
+            MovementCommand::TextObject(_) => false,
+            MovementCommand::FindCharForward(_)
+            | MovementCommand::FindCharBackward(_)
+            | MovementCommand::TillCharForward(_)
+            | MovementCommand::TillCharBackward(_)
+            | MovementCommand::RepeatFindForward
+            | MovementCommand::RepeatFindBackward => false,
             _ => false,
         }
+    }
+}
+
+impl Motion for TextObject {
+    fn calculate_end_position(
+        &self,
+        editor: &Editor,
+        start: (usize, usize),
+        _count: usize,
+    ) -> (usize, usize) {
+        match self {
+            TextObject::InnerWord | TextObject::AroundWord => {
+                calculate_word_object(editor, start, matches!(self, TextObject::AroundWord))
+            }
+            TextObject::InnerQuote | TextObject::AroundQuote => {
+                calculate_quote_object(editor, start, '"', matches!(self, TextObject::AroundQuote))
+            }
+            TextObject::InnerSingleQuote | TextObject::AroundSingleQuote => calculate_quote_object(
+                editor,
+                start,
+                '\'',
+                matches!(self, TextObject::AroundSingleQuote),
+            ),
+            TextObject::InnerParen | TextObject::AroundParen => calculate_paren_object(
+                editor,
+                start,
+                '(',
+                ')',
+                matches!(self, TextObject::AroundParen),
+            ),
+            TextObject::InnerBracket | TextObject::AroundBracket => calculate_paren_object(
+                editor,
+                start,
+                '[',
+                ']',
+                matches!(self, TextObject::AroundBracket),
+            ),
+            TextObject::InnerBrace | TextObject::AroundBrace => calculate_paren_object(
+                editor,
+                start,
+                '{',
+                '}',
+                matches!(self, TextObject::AroundBrace),
+            ),
+            TextObject::InnerAngle | TextObject::AroundAngle => calculate_paren_object(
+                editor,
+                start,
+                '<',
+                '>',
+                matches!(self, TextObject::AroundAngle),
+            ),
+        }
+    }
+
+    fn is_line_motion(&self) -> bool {
+        false
+    }
+}
+
+fn calculate_word_object(
+    editor: &Editor,
+    start: (usize, usize),
+    include_spaces: bool,
+) -> (usize, usize) {
+    let buffer = editor.buffer();
+    let (row, col) = start;
+
+    let Some(line) = buffer.get_line(row) else {
+        return (row, col);
+    };
+    let line_len = line.len();
+
+    if line_len == 0 {
+        return (row, col);
+    }
+
+    let mut end_col = col;
+
+    if include_spaces {
+        while end_col < line_len && line.chars().nth(end_col).is_some_and(|c| c.is_whitespace()) {
+            end_col += 1;
+        }
+        while end_col < line_len && !line.chars().nth(end_col).is_some_and(|c| c.is_whitespace()) {
+            end_col += 1;
+        }
+        if end_col > col {
+            return (row, end_col - 1);
+        }
+    }
+
+    let mut in_word = !line.chars().nth(col).is_none_or(|c| c.is_whitespace());
+    while end_col < line_len {
+        let ch = line.chars().nth(end_col).unwrap();
+        if ch.is_whitespace() {
+            if in_word {
+                break;
+            }
+        } else {
+            in_word = true;
+        }
+        end_col += 1;
+    }
+
+    (row, end_col.saturating_sub(1))
+}
+
+fn calculate_quote_object(
+    editor: &Editor,
+    start: (usize, usize),
+    quote_char: char,
+    include_quote: bool,
+) -> (usize, usize) {
+    let buffer = editor.buffer();
+    let (row, col) = start;
+
+    let Some(line) = buffer.get_line(row) else {
+        return (row, col);
+    };
+    let line_len = line.len();
+
+    if line_len == 0 {
+        return (row, col);
+    }
+
+    let mut start_search = col;
+    let mut first_quote = None;
+    let mut last_quote = None;
+
+    while start_search < line_len {
+        let ch = line.chars().nth(start_search).unwrap();
+        if ch == quote_char {
+            if first_quote.is_none() {
+                first_quote = Some(start_search);
+            }
+            last_quote = Some(start_search);
+        }
+        start_search += 1;
+    }
+
+    match (first_quote, last_quote) {
+        (Some(first), Some(last)) if first != last => {
+            if include_quote {
+                (row, last)
+            } else {
+                (row, last - 1)
+            }
+        }
+        _ => (row, col),
+    }
+}
+
+fn calculate_paren_object(
+    editor: &Editor,
+    start: (usize, usize),
+    open_char: char,
+    close_char: char,
+    include_delim: bool,
+) -> (usize, usize) {
+    let buffer = editor.buffer();
+    let (row, col) = start;
+
+    let Some(line) = buffer.get_line(row) else {
+        return (row, col);
+    };
+    let line_len = line.len();
+
+    if line_len == 0 {
+        return (row, col);
+    }
+
+    let mut depth = 0;
+    let mut first_open = None;
+    let mut last_close = None;
+
+    for i in 0..line_len {
+        let ch = line.chars().nth(i).unwrap();
+        if ch == open_char {
+            if first_open.is_none() && i >= col {
+                first_open = Some(i);
+            }
+            depth += 1;
+        } else if ch == close_char && depth > 0 {
+            depth -= 1;
+            if depth == 0 {
+                last_close = Some(i);
+            }
+        }
+    }
+
+    match (first_open, last_close) {
+        (Some(_first), Some(last)) => {
+            if include_delim {
+                (row, last)
+            } else {
+                (row, last - 1)
+            }
+        }
+        _ => (row, col),
     }
 }
 
@@ -200,6 +525,10 @@ pub enum EditCommand {
     YankLine, // yy
     Yank(MovementCommand), // y{motion}
     YankSelection,         // y in visual mode
+
+    /// Change (delete and enter insert mode) commands
+    ChangeLine, // cc
+    Change(MovementCommand), // c{motion}
 
     /// Paste commands
     PasteAfter, // p
@@ -239,6 +568,16 @@ impl Command for EditCommand {
             EditCommand::Yank(motion) => {
                 let count = editor.pending_count.unwrap_or(1);
                 OperatorExecutor::execute_yank_motion(editor, motion.clone(), count);
+                Ok(())
+            }
+            EditCommand::ChangeLine => {
+                let count = editor.pending_count.unwrap_or(1);
+                OperatorExecutor::execute_change_line(editor, count);
+                Ok(())
+            }
+            EditCommand::Change(motion) => {
+                let count = editor.pending_count.unwrap_or(1);
+                OperatorExecutor::execute_change_motion(editor, motion.clone(), count);
                 Ok(())
             }
             EditCommand::PasteAfter => {
@@ -1277,6 +1616,110 @@ impl OperatorExecutor {
             };
             editor.status_msg = Some(message);
         }
+    }
+
+    /// Execute change line command (cc) - delete line and enter insert mode
+    pub fn execute_change_line(editor: &mut Editor, count: usize) {
+        let start_row = editor.cursor().row;
+        let mut deleted_lines = Vec::new();
+
+        for i in 0..count {
+            let row = start_row + i;
+            if row < editor.buffer().line_count() {
+                if let Some(line) = editor.buffer().get_line(row) {
+                    deleted_lines.push(line.clone());
+                }
+            }
+        }
+
+        if !deleted_lines.is_empty() {
+            let deleted_text = deleted_lines.join("\n") + "\n";
+            editor.register.store_lines(deleted_text.clone());
+
+            let delete_pos = crate::buffer::Position::new(start_row, 0);
+            let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
+            editor.history_mut().push(action);
+        }
+
+        for _ in 0..count {
+            if editor.buffer().line_count() > 1 {
+                if let Some(_deleted_line) = editor.buffer().get_line(editor.cursor().row) {
+                    TextOperations::delete_line_at(editor, editor.cursor().row);
+
+                    if editor.cursor().row >= editor.buffer().line_count() {
+                        editor.cursor_mut().row = editor.buffer().line_count().saturating_sub(1);
+                    }
+
+                    let line_len = editor.buffer().line_length(editor.cursor().row);
+                    if editor.cursor().col >= line_len && line_len > 0 {
+                        editor.cursor_mut().col = line_len - 1;
+                    } else if line_len == 0 {
+                        editor.cursor_mut().col = 0;
+                    }
+                }
+            } else {
+                if let Some(_line) = editor.buffer().get_line(0) {
+                    TextOperations::clear_line_at(editor, 0);
+                    editor.cursor_mut().col = 0;
+                }
+                break;
+            }
+        }
+
+        editor.set_modified(true);
+        editor.update_scroll();
+
+        editor.start_insert_mode();
+        editor.mode = crate::editor::Mode::Insert;
+    }
+
+    /// Execute change with motion command (c{motion}) - delete range and enter insert mode
+    pub fn execute_change_motion(editor: &mut Editor, motion: MovementCommand, count: usize) {
+        let start_pos = (editor.cursor().row, editor.cursor().col);
+        let end_pos = motion.calculate_end_position(editor, start_pos, count);
+
+        let deleted_text = TextOperations::extract_range(editor, start_pos, end_pos);
+
+        if !deleted_text.is_empty() {
+            if motion.is_line_motion() {
+                editor.register.store_lines(deleted_text.clone());
+            } else {
+                editor.register.store_text(deleted_text.clone());
+            }
+
+            let (delete_row, delete_col) = if start_pos.0 < end_pos.0
+                || (start_pos.0 == end_pos.0 && start_pos.1 <= end_pos.1)
+            {
+                start_pos
+            } else {
+                end_pos
+            };
+            let delete_pos = crate::buffer::Position::new(delete_row, delete_col);
+            let action = crate::history::EditAction::delete_text(delete_pos, deleted_text);
+            editor.history_mut().push(action);
+        }
+
+        let final_cursor_pos = match motion {
+            MovementCommand::WordBackward
+            | MovementCommand::LineStart
+            | MovementCommand::LineFirstChar
+            | MovementCommand::FileStart
+            | MovementCommand::Left => end_pos,
+            _ => start_pos,
+        };
+
+        TextOperations::delete_range(editor, start_pos, end_pos);
+
+        editor.cursor_mut().row = final_cursor_pos.0;
+        editor.cursor_mut().col = final_cursor_pos.1;
+
+        TextOperations::clamp_cursor_to_buffer(editor);
+
+        editor.set_modified(true);
+        editor.update_scroll();
+
+        editor.start_insert_mode();
+        editor.mode = crate::editor::Mode::Insert;
     }
 
     /// Execute paste after cursor (p)

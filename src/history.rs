@@ -544,17 +544,9 @@ impl History {
             } else {
                 // Regular multi-line text insertion (contains newlines but doesn't start with one)
                 let segments: Vec<&str> = text.split('\n').collect();
-                let mut current_row = start_pos.row;
-
-                // Calculate final position after all insertions
-                for (segment_idx, _segment) in segments.iter().enumerate() {
-                    if segment_idx > 0 {
-                        current_row += 1;
-                    }
-                }
 
                 // Delete backwards from the final position
-                current_row = start_pos.row + segments.len() - 1;
+                let mut current_row = start_pos.row + segments.len() - 1;
 
                 // Delete characters from each line, starting from the last line
                 for (segment_idx, segment) in segments.iter().enumerate().rev() {
