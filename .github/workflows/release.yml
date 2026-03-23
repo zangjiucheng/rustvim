@@ -29,12 +29,12 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@1.85.0
+      uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
       
     - name: Cache cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -57,41 +57,61 @@ jobs:
     name: Build (${{ matrix.os }})
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
+          # Linux
           - os: ubuntu-latest
-            artifact_suffix: linux
+            artifact_suffix: linux-x86_64
             target: x86_64-unknown-linux-gnu
-          - os: macos-15
-            artifact_suffix: macos
+          # macOS Intel
+          - os: macos-latest
+            artifact_suffix: macos-x86_64
             target: x86_64-apple-darwin
+          # macOS Apple Silicon
+          - os: macos-latest
+            artifact_suffix: macos-aarch64
+            target: aarch64-apple-darwin
+          # Windows
+          - os: windows-latest
+            artifact_suffix: windows-x86_64
+            target: x86_64-pc-windows-gnu
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@1.85.0
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Add target
+      run: rustup target add ${{ matrix.target }}
 
     - name: Build in release mode
-      run: cargo build --release
+      run: cargo build --release --target ${{ matrix.target }}
 
-    - name: Archive binary
+    - name: Package binary
       shell: bash
       run: |
         CRATE_NAME=$(cargo metadata --no-deps --format-version=1 \
                      | jq -r '.packages[0].name')
-        BIN_PATH="target/release/$CRATE_NAME"
+        BIN_PATH="target/${{ matrix.target }}/release/$CRATE_NAME"
         ARCHIVE="${CRATE_NAME}-${{ inputs.version }}-${{ matrix.artifact_suffix }}.zip"
         
-        7z a "$ARCHIVE" "$BIN_PATH"
+        if [ '${{ runner.os }}' = 'Windows' ]; then
+          7z a "$ARCHIVE" "$BIN_PATH.exe" "$BIN_PATH.exe.pdb" 2>/dev/null || true
+        else
+          tar -czf "$ARCHIVE" "$BIN_PATH"
+        fi
         echo "Created $ARCHIVE"
         echo "ARCHIVE_NAME=$ARCHIVE" >> $GITHUB_ENV
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.artifact_suffix }}-binary
+        name: ${{ matrix.artifact_suffix }}
         path: ${{ env.ARCHIVE_NAME }}
 
   release:
@@ -105,7 +125,7 @@ jobs:
         path: artifacts
       
     - name: Display artifact structure
-      run: find artifacts -type f -name "*.zip" | head -20
+      run: find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) | head -20
       
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -120,8 +140,10 @@ jobs:
           ### Downloads
           
           Choose the appropriate binary for your platform:
-          - **Linux**: `rustvim-${{ inputs.version }}-linux.zip`
-          - **macOS**: `rustvim-${{ inputs.version }}-macos.zip`
+          - **Linux (x86_64)**: `rustvim-${{ inputs.version }}-linux-x86_64.zip`
+          - **macOS (Intel)**: `rustvim-${{ inputs.version }}-macos-x86_64.zip`
+          - **macOS (Apple Silicon)**: `rustvim-${{ inputs.version }}-macos-aarch64.zip`
+          - **Windows (x86_64)**: `rustvim-${{ inputs.version }}-windows-x86_64.zip`
           
           ### Installation
           
@@ -133,7 +155,7 @@ jobs:
           ### What's New
           
           See the [commit history](https://github.com/zangjiucheng/rustvim/commits/${{ inputs.version }}) for detailed changes.
-        files: artifacts/**/*.zip
+        files: artifacts/**
         draft: false
         prerelease: ${{ inputs.prerelease }}
         generate_release_notes: true
@@ -147,7 +169,7 @@ jobs:
         echo "### 📦 Release Details" >> $GITHUB_STEP_SUMMARY
         echo "- **Version**: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Pre-release**: ${{ inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: Linux, macOS" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platforms**: Linux (x86_64), macOS (Intel & Apple Silicon), Windows (x86_64)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
         echo "- [View Release](https://github.com/zangjiucheng/rustvim/releases/tag/${{ inputs.version }})" >> $GITHUB_STEP_SUMMARY
