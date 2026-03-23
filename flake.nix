@@ -7,8 +7,15 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
@@ -17,7 +24,12 @@
 
         # Define the Rust toolchain
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
+          extensions = [
+            "rust-src"
+            "rust-analyzer"
+            "clippy"
+            "rustfmt"
+          ];
         };
 
         # Native build inputs for cross-platform compatibility
@@ -29,13 +41,16 @@
         ];
 
         # Build inputs that may be needed for certain dependencies
-        buildInputs = with pkgs; lib.optionals stdenv.isLinux [
-          # Linux-specific dependencies if needed
-        ] ++ lib.optionals stdenv.isDarwin [
-          # macOS-specific dependencies
-          darwin.apple_sdk.frameworks.Security
-          darwin.apple_sdk.frameworks.CoreFoundation
-        ];
+        buildInputs =
+          with pkgs;
+          lib.optionals stdenv.isLinux [
+            # Linux-specific dependencies if needed
+          ]
+          ++ lib.optionals stdenv.isDarwin [
+            # macOS-specific dependencies
+            darwin.apple_sdk.frameworks.Security
+            darwin.apple_sdk.frameworks.CoreFoundation
+          ];
 
         # Development tools
         devTools = with pkgs; [
@@ -43,19 +58,19 @@
           git
 
           # Code coverage tools
-          cargo-llvm-cov
-          
+          # cargo-llvm-cov
+
           # Additional Rust tools
           cargo-watch
           cargo-edit
           cargo-audit
           cargo-outdated
-          
+
           # Terminal utilities
           bat
           ripgrep
           fd
-          
+
           # Documentation tools
           mdbook
         ];
@@ -65,13 +80,13 @@
         # Development shell
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
-          
+
           packages = devTools;
 
           # Environment variables
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
           RUST_LOG = "debug";
-          
+
           # Shell hook for initial setup
           shellHook = ''
             echo "🦀 Welcome to RustVim development environment!"
@@ -89,7 +104,7 @@
             echo ""
             echo "Config example is available at .rustvimrc.example"
             echo "Copy it to ~/.rustvimrc to customize your settings"
-            
+
             # Set up git hooks if not already done
             if [ ! -f .git/hooks/pre-commit ]; then
               echo "Setting up pre-commit hooks..."
@@ -105,10 +120,10 @@
             # Ensure cargo uses the correct Rust toolchain
             CARGO_HOME = "$HOME/.cargo";
             RUSTUP_HOME = "$HOME/.rustup";
-            
+
             # Better backtraces for debugging
             RUST_BACKTRACE = "1";
-            
+
             # Optimize build cache
             CARGO_TARGET_DIR = "./target";
           };
@@ -118,9 +133,9 @@
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "rustvim";
           version = "0.1.0";
-          
+
           src = ./.;
-          
+
           cargoLock = {
             lockFile = ./Cargo.lock;
           };
@@ -139,5 +154,6 @@
 
         # Formatter for `nix fmt`
         formatter = pkgs.nixpkgs-fmt;
-      });
+      }
+    );
 }
