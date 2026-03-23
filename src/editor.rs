@@ -101,6 +101,9 @@ pub struct Editor {
     /// Position of current search match (for highlighting)
     pub search_match: Option<(usize, usize, usize)>, // (row, col, length)
 
+    /// Last character searched with f/F/t/T (for ; and , repeat)
+    pub last_find_char: Option<char>,
+
     /// Current command input buffer (while typing command)
     pub command_input: String,
 
@@ -214,6 +217,7 @@ impl Editor {
             search_query: None,
             search_input: String::new(),
             search_match: None,
+            last_find_char: None,
             command_input: String::new(),
             keymap_processor: KeymapProcessor::new(),
             visual_start: None,

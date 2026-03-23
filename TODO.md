@@ -72,10 +72,10 @@
 ## Missing Features
 
 ### High Priority
-- [ ] Change operator (`c`) - delete and enter insert mode
-- [ ] Text objects (`iw`, `aw`, `i"`, `a"`, `i(`, `a(`)
-- [ ] Find character motions (`f`, `F`, `t`, `T`)
-- [ ] Repeat find (`;`, `,`)
+- [x] Change operator (`c`) - delete and enter insert mode
+- [x] Text objects (`iw`, `aw`, `i"`, `a"`, `i(`, `a(`)
+- [x] Find character motions (`f`, `F`, `t`, `T`)
+- [x] Repeat find (`;`, `,`)
 - [ ] Match bracket motion (`%`)
 - [ ] Shift operators (`<`, `>`)
 - [ ] Marks (`m{a-z}`, `'a`)

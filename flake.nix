@@ -57,8 +57,8 @@
           # Version control
           git
 
-          # Code coverage tools
-          # cargo-llvm-cov
+          # Code coverage tools (llvm-tools for llvm-cov)
+          llvm
 
           # Additional Rust tools
           cargo-watch
@@ -100,7 +100,8 @@
             echo "  cargo fmt            - Format code"
             echo "  cargo run [file]     - Run RustVim"
             echo "  cargo watch -x test  - Watch and run tests"
-            echo "  cargo llvm-cov --html - Generate coverage report"
+            echo "  cargo llvm-cov       - Generate coverage report (via cargo)"
+            echo "  cargo llvm-cov show  - Show coverage in terminal"
             echo ""
             echo "Config example is available at .rustvimrc.example"
             echo "Copy it to ~/.rustvimrc to customize your settings"
@@ -126,6 +127,10 @@
 
             # Optimize build cache
             CARGO_TARGET_DIR = "./target";
+
+            # LLVM coverage tools
+            LLVM_COV = "${pkgs.llvm}/bin/llvm-cov";
+            LLVM_PROFDATA = "${pkgs.llvm}/bin/llvm-profdata";
           };
         };
 
