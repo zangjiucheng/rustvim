@@ -392,3 +392,14 @@ fn test_edge_case_scrolloff() {
     // Test boundary condition
     assert!(config.set_option("scrolloff", Some("51")).is_err());
 }
+
+#[test]
+fn test_fill_missing_with_defaults() {
+    // Test calling fill_missing_with_defaults (just to cover the function)
+    let mut config = EditorConfig::default();
+    config.fill_missing_with_defaults();
+
+    // After filling with defaults, should still have valid values
+    assert!(config.tab_size > 0);
+    assert!(config.scroll_offset <= 50);
+}

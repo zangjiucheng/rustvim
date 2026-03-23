@@ -109,3 +109,24 @@ fn test_newline_preservation() {
     assert_eq!(newline_buffer.get_line(0), Some(String::new()));
     assert!(newline_buffer.ends_with_newline);
 }
+
+#[test]
+fn test_delete_char_at_end_of_line_merges() {
+    let mut buffer = Buffer::new();
+    buffer.insert_char(Position::new(0, 0), 'h');
+    buffer.insert_char(Position::new(0, 1), 'i');
+    buffer.insert_newline(Position::new(0, 2));
+    buffer.insert_char(Position::new(1, 0), 't');
+    buffer.insert_char(Position::new(1, 1), 'h');
+    buffer.insert_char(Position::new(1, 2), 'e');
+    buffer.insert_char(Position::new(1, 3), 'r');
+
+    assert_eq!(buffer.line_count(), 2);
+    assert_eq!(buffer.get_line(0), Some("hi".to_string()));
+    assert_eq!(buffer.get_line(1), Some("ther".to_string()));
+
+    let deleted = buffer.delete_char(Position::new(0, 2));
+    assert_eq!(deleted, Some('\n'));
+    assert_eq!(buffer.line_count(), 1);
+    assert_eq!(buffer.get_line(0), Some("hither".to_string()));
+}
