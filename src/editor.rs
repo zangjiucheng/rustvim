@@ -416,10 +416,15 @@ impl Editor {
             let buffer_row = screen_row + self.buffers[self.current_buffer].scroll_offset;
 
             // Draw line number if enabled
-            if self.config.show_line_numbers {
+            if self.config.show_line_numbers || self.config.show_relative_numbers {
+                let current_row = self.buffers[self.current_buffer].cursor.row;
                 if buffer_row < self.buffers[self.current_buffer].buffer.line_count() {
-                    let line_num =
-                        format!("{:>width$} ", buffer_row + 1, width = line_num_width - 1);
+                    let line_num = if self.config.show_relative_numbers {
+                        let relative = (buffer_row as i64 - current_row as i64).unsigned_abs();
+                        format!("{:>width$} ", relative, width = line_num_width - 1)
+                    } else {
+                        format!("{:>width$} ", buffer_row + 1, width = line_num_width - 1)
+                    };
                     self.terminal.write(&line_num)?;
                 } else {
                     let empty_gutter = " ".repeat(line_num_width);
@@ -1310,7 +1315,10 @@ impl Editor {
 
     // Line number gutter width calculation
     pub fn line_number_gutter_width(&self) -> usize {
-        if self.show_line_numbers || self.config.show_line_numbers {
+        if self.show_line_numbers
+            || self.config.show_line_numbers
+            || self.config.show_relative_numbers
+        {
             let line_count = self.buffers[self.current_buffer].buffer.line_count();
             if line_count == 0 {
                 3
